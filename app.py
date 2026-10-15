@@ -6,7 +6,7 @@ import streamlit.components.v1 as components
 import os, io, re, json, base64
 from pathlib import Path
 
-# ====== GOOGLE DRIVE + SHEETS ======
+# ===== GOOGLE DRIVE + SHEETS =====
 try:
     from google.oauth2 import service_account
     from googleapiclient.discovery import build
@@ -17,25 +17,31 @@ except:
 
 try:
     import gspread
-    from oauth2client.service_account import ServiceAccountCredentials as GSpreadCreds
+    from google.oauth2.service_account import Credentials as ServiceAccountCredentials
     SHEETS_AVAILABLE = True
 except:
     SHEETS_AVAILABLE = False
 
 BASE_DIR = os.path.dirname(__file__)
-SERVICE_FILE = os.path.join(BASE_DIR, "hotrigo-54cb1a26cd13.json")
 DRIVE_FOLDER = "Hotrigo Backup"
-SCOPES = ['https://www.googleapis.com/auth/drive']
 SHEET_NAME = "HOTRIGO_DATABASE"
 SHEET_HEADER = ["ID","Sale Date","Agent","Passengers","Room Type","Rooms","Hotel","Check-in","Check-out","Nights","Sell Price","Cost","Profit","Voucher No","Notes","Airline","Employee","Dep Time","Ret Time","Flight No Dep","Flight No Ret","Transport Co","Price Night","Hotel Total","Flight $","Transport $"]
 
 def get_drive_service():
-    if not DRIVE_AVAILABLE or not os.path.exists(SERVICE_FILE): return None
     try:
-        creds = service_account.Credentials.from_service_account_file(SERVICE_FILE, scopes=SCOPES)
-        return build('drive', 'v3', credentials=creds)
-    except: return None
-
+        if "gdrive" not in st.secrets:
+            return None, None
+        creds_dict = dict(st.secrets["gdrive"])
+        folder_id = creds_dict.pop("FOLDER_ID", None)
+        pk = creds_dict.get("private_key", "")
+        if "\\n" in pk:
+            creds_dict["private_key"] = pk.replace("\\n", "\n")
+        creds = service_account.Credentials.from_service_account_info(
+            creds_dict, scopes=['https://www.googleapis.com/auth/drive'])
+        service = build('drive', 'v3', credentials=creds)
+        return service, folder_id
+    except Exception as e:
+        return None, None
 def get_folder_id(service, name):
     try:
         q=f"mimeType='application/vnd.google-apps.folder' and name='{name}' and trashed=false"
@@ -58,10 +64,14 @@ def upload_drive(local_path):
         except: return parent_id
 
     try:
-        service=get_drive_service()
+        service, folder_id_secret = get_drive_service()
         if service and os.path.exists(local_path):
             # 1- جيب المجلد الرئيسي Hotrigo Backup
-            folder_id=get_folder_id(service, DRIVE_FOLDER)
+            if folder_id_secret:
+                folder_id = folder_id_secret
+            else:
+                folder_id=get_folder_id(service, DRIVE_FOLDER)
+
             if folder_id:
                 fname=os.path.basename(local_path)
                 up=fname.upper()
@@ -83,39 +93,34 @@ def upload_drive(local_path):
                 print(f"✅ API Upload: {fname} -> {folder_id}")
                 return True
     except Exception as e:
-        print(f"API failed: {e}")
-    try:
-        possible_g_paths = []
-        g_drive_root = None
-        for drive_letter in ["G:", "H:", "F:"]:
-            if os.path.exists(f"{drive_letter}\\My Drive"):
-                g_drive_root = f"{drive_letter}\\My Drive\\Hotrigo Backup"
-                break
-        if g_drive_root:
-            fname=os.path.basename(local_path)
-            up=fname.upper()
-            sub=""
-            if up.startswith("BOOK-"): sub="Invoices"
-            elif up.startswith("VOUCHER_"): sub="Vouchers"
-            elif up.startswith("STATEMENT_"): sub="Statements"
-            if sub:
-                g_drive_root=os.path.join(g_drive_root, sub)
-            os.makedirs(g_drive_root, exist_ok=True)
-            import shutil
-            dest = os.path.join(g_drive_root, os.path.basename(local_path))
-            shutil.copy2(local_path, dest)
-            print(f"✅ G-Drive Copy: {dest}")
-            return True
-    except Exception as e:
-        print(f"G-Drive copy failed: {e}")
+        print(f"Upload Error: {e}")
     return False
 
-def get_gspread_sheet():
-    if not SHEETS_AVAILABLE or not os.path.exists(SERVICE_FILE): return None
+def get_sheet_client():
     try:
-        scope = ["https://spreadsheets.google.com/feeds","https://www.googleapis.com/auth/drive"]
-        creds = GSpreadCreds.from_json_keyfile_name(SERVICE_FILE, scope)
+        if "gdrive" not in st.secrets:
+            return None
+        creds_dict = dict(st.secrets["gdrive"])
+        creds_dict.pop("FOLDER_ID", None)
+        pk = creds_dict.get("private_key", "")
+        if "\\n" in pk:
+            creds_dict["private_key"] = pk.replace("\\n", "\n")
+        creds = service_account.Credentials.from_service_account_info(
+            creds_dict, scopes=['https://www.googleapis.com/auth/spreadsheets','https://www.googleapis.com/auth/drive'])
         client = gspread.authorize(creds)
+        return client
+    except Exception as e:
+        print(f"Sheet Error: {e}")
+        return None
+
+def load_data():
+    return []
+
+def get_gspread_sheet():
+    try:
+        client = get_sheet_client()
+        if not client:
+            return None
         sheet = client.open(SHEET_NAME).sheet1
         try:
             first = sheet.row_values(1)
@@ -126,7 +131,7 @@ def get_gspread_sheet():
             sheet.append_row(SHEET_HEADER)
         return sheet
     except Exception as e:
-        print(f"Sheet error: {e}")
+        print(f"Sheet open failed: {e}")
         return None
 
 def booking_to_sheet_row(b):
