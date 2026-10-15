@@ -147,11 +147,11 @@ def get_gspread_sheet():
         return None
 def booking_to_sheet_row(b):
     try:
-        return [b[0], b[1], b[4], b[5], b[21] if len(b)>21 and b[21] else "", b[25] if len(b)>25 and b[25] else 1, b[6], b[2], b[3], b[7], b[12], b[13], b[14], b[15], b[16], b[17] if len(b)>17 else "", b[18] if len(b)>18 else "", b[19] if len(b)>19 else "", b[20] if len(b)>20 else "", b[23] if len(b)>23 else "", b[24] if len(b)>24 else "", b[22] if len(b)>22 else "", b[8], b[9], b[10], b[11]]
+        # حول كل قيمة لنص وما ترجع None ابداً
+        return [str(x) if x is not None else "" for x in b]
     except Exception as e:
-        print(f"Row error {e}")
+        print(f"booking_to_sheet_row error {e} for {b}")
         return None
-
 def sync_booking_to_sheet(booking_id):
     try:
         sheet = get_gspread_sheet()
