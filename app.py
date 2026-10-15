@@ -182,20 +182,30 @@ def sync_all_to_sheet():
         conn = sqlite3.connect(DB)
         all_b = conn.execute("SELECT * FROM bookings ORDER BY id").fetchall()
         conn.close()
+
+        print(f"DEBUG: Found {len(all_b)} bookings in DB")
+
         rows = [SHEET_HEADER]
         for b in all_b:
             r = booking_to_sheet_row(b)
+            print(f"DEBUG booking {b[0]} -> row: {r}")
             if r:
                 rows.append(r)
+
+        print(f"DEBUG: Final rows to sync: {len(rows)-1}")
+
         if len(rows) <= 1:
-            print("No bookings to sync")
+            print("No bookings to sync - booking_to_sheet_row returns None!")
             return False
+
         sheet.clear()
-        sheet.update(range_name='A1', values=rows, value_input_option='USER_ENTERED')
-        print(f"✅ Synced all {len(rows)-1}")
+        sheet.update('A1', rows) # بدون range_name
+        print(f"✅ Synced all {len(rows)-1} bookings to sheet")
         return True
     except Exception as e:
         print(f"Sync all failed {e}")
+        import traceback
+        traceback.print_exc()
         return False
 try:
     from reportlab.lib.pagesizes import A4, landscape
