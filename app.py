@@ -6,6 +6,177 @@ import streamlit.components.v1 as components
 import os, io, re, json, base64
 from pathlib import Path
 
+# ====== GOOGLE DRIVE + SHEETS ======
+try:
+    from google.oauth2 import service_account
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaFileUpload
+    DRIVE_AVAILABLE = True
+except:
+    DRIVE_AVAILABLE = False
+
+try:
+    import gspread
+    from oauth2client.service_account import ServiceAccountCredentials as GSpreadCreds
+    SHEETS_AVAILABLE = True
+except:
+    SHEETS_AVAILABLE = False
+
+BASE_DIR = os.path.dirname(__file__)
+SERVICE_FILE = os.path.join(BASE_DIR, "hotrigo-54cb1a26cd13.json")
+DRIVE_FOLDER = "Hotrigo Backup"
+SCOPES = ['https://www.googleapis.com/auth/drive']
+SHEET_NAME = "HOTRIGO_DATABASE"
+SHEET_HEADER = ["ID","Sale Date","Agent","Passengers","Room Type","Rooms","Hotel","Check-in","Check-out","Nights","Sell Price","Cost","Profit","Voucher No","Notes","Airline","Employee","Dep Time","Ret Time","Flight No Dep","Flight No Ret","Transport Co","Price Night","Hotel Total","Flight $","Transport $"]
+
+def get_drive_service():
+    if not DRIVE_AVAILABLE or not os.path.exists(SERVICE_FILE): return None
+    try:
+        creds = service_account.Credentials.from_service_account_file(SERVICE_FILE, scopes=SCOPES)
+        return build('drive', 'v3', credentials=creds)
+    except: return None
+
+def get_folder_id(service, name):
+    try:
+        q=f"mimeType='application/vnd.google-apps.folder' and name='{name}' and trashed=false"
+        res=service.files().list(q=q, fields="files(id)").execute()
+        files=res.get('files',[])
+        if files: return files[0]['id']
+        folder=service.files().create(body={'name':name,'mimeType':'application/vnd.google-apps.folder'},fields='id').execute()
+        return folder.get('id')
+    except: return None
+
+def upload_drive(local_path):
+    def get_or_create_subfolder(service, parent_id, sub_name):
+        try:
+            q=f"name='{sub_name}' and '{parent_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            res=service.files().list(q=q, fields="files(id)").execute()
+            fls=res.get('files',[])
+            if fls: return fls[0]['id']
+            folder=service.files().create(body={'name':sub_name,'mimeType':'application/vnd.google-apps.folder','parents':[parent_id]}, fields='id').execute()
+            return folder.get('id')
+        except: return parent_id
+
+    try:
+        service=get_drive_service()
+        if service and os.path.exists(local_path):
+            # 1- جيب المجلد الرئيسي Hotrigo Backup
+            folder_id=get_folder_id(service, DRIVE_FOLDER)
+            if folder_id:
+                fname=os.path.basename(local_path)
+                up=fname.upper()
+                # 2- حدد المجلد الفرعي حسب اسم الملف
+                if up.startswith("BOOK-"):
+                    folder_id = get_or_create_subfolder(service, folder_id, "Invoices")
+                elif up.startswith("VOUCHER_"):
+                    folder_id = get_or_create_subfolder(service, folder_id, "Vouchers")
+                elif up.startswith("STATEMENT_"):
+                    folder_id = get_or_create_subfolder(service, folder_id, "Statements")
+
+                q=f"name='{fname}' and '{folder_id}' in parents and trashed=false"
+                ex=service.files().list(q=q, fields="files(id)").execute()
+                for f in ex.get('files',[]):
+                    try: service.files().delete(fileId=f['id']).execute()
+                    except: pass
+                media=MediaFileUpload(local_path, resumable=True)
+                service.files().create(body={'name':fname,'parents':[folder_id]}, media_body=media).execute()
+                print(f"✅ API Upload: {fname} -> {folder_id}")
+                return True
+    except Exception as e:
+        print(f"API failed: {e}")
+    try:
+        possible_g_paths = []
+        g_drive_root = None
+        for drive_letter in ["G:", "H:", "F:"]:
+            if os.path.exists(f"{drive_letter}\\My Drive"):
+                g_drive_root = f"{drive_letter}\\My Drive\\Hotrigo Backup"
+                break
+        if g_drive_root:
+            fname=os.path.basename(local_path)
+            up=fname.upper()
+            sub=""
+            if up.startswith("BOOK-"): sub="Invoices"
+            elif up.startswith("VOUCHER_"): sub="Vouchers"
+            elif up.startswith("STATEMENT_"): sub="Statements"
+            if sub:
+                g_drive_root=os.path.join(g_drive_root, sub)
+            os.makedirs(g_drive_root, exist_ok=True)
+            import shutil
+            dest = os.path.join(g_drive_root, os.path.basename(local_path))
+            shutil.copy2(local_path, dest)
+            print(f"✅ G-Drive Copy: {dest}")
+            return True
+    except Exception as e:
+        print(f"G-Drive copy failed: {e}")
+    return False
+
+def get_gspread_sheet():
+    if not SHEETS_AVAILABLE or not os.path.exists(SERVICE_FILE): return None
+    try:
+        scope = ["https://spreadsheets.google.com/feeds","https://www.googleapis.com/auth/drive"]
+        creds = GSpreadCreds.from_json_keyfile_name(SERVICE_FILE, scope)
+        client = gspread.authorize(creds)
+        sheet = client.open(SHEET_NAME).sheet1
+        try:
+            first = sheet.row_values(1)
+            if not first or first[0]!= "ID":
+                sheet.clear()
+                sheet.append_row(SHEET_HEADER)
+        except:
+            sheet.append_row(SHEET_HEADER)
+        return sheet
+    except Exception as e:
+        print(f"Sheet error: {e}")
+        return None
+
+def booking_to_sheet_row(b):
+    try:
+        return [b[0], b[1], b[4], b[5], b[21] if len(b)>21 and b[21] else "", b[25] if len(b)>25 and b[25] else 1, b[6], b[2], b[3], b[7], b[12], b[13], b[14], b[15], b[16], b[17] if len(b)>17 else "", b[18] if len(b)>18 else "", b[19] if len(b)>19 else "", b[20] if len(b)>20 else "", b[23] if len(b)>23 else "", b[24] if len(b)>24 else "", b[22] if len(b)>22 else "", b[8], b[9], b[10], b[11]]
+    except Exception as e:
+        print(f"Row error {e}")
+        return None
+
+def sync_booking_to_sheet(booking_id):
+    try:
+        sheet = get_gspread_sheet()
+        if not sheet: return False
+        conn=sqlite3.connect(DB)
+        b=conn.execute("SELECT * FROM bookings WHERE id=?", (int(booking_id),)).fetchone()
+        conn.close()
+        if not b: return False
+        row = booking_to_sheet_row(b)
+        if not row: return False
+        try:
+            cell = sheet.find(str(booking_id))
+            sheet.update(f"A{cell.row}:Z{cell.row}", [row])
+            print(f"✅ Updated ID {booking_id}")
+        except:
+            sheet.append_row(row, value_input_option='USER_ENTERED')
+            print(f"✅ Appended ID {booking_id}")
+        return True
+    except Exception as e:
+        print(f"Sync failed {booking_id}: {e}")
+        return False
+
+def sync_all_to_sheet():
+    try:
+        sheet = get_gspread_sheet()
+        if not sheet: return False
+        conn=sqlite3.connect(DB)
+        all_b = conn.execute("SELECT * FROM bookings ORDER BY id").fetchall()
+        conn.close()
+        rows = [SHEET_HEADER]
+        for b in all_b:
+            r = booking_to_sheet_row(b)
+            if r: rows.append(r)
+        sheet.clear()
+        sheet.update("A1", rows, value_input_option='USER_ENTERED')
+        print(f"✅ Synced all {len(rows)-1}")
+        return True
+    except Exception as e:
+        print(f"Sync all failed {e}")
+        return False
+
 try:
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.pdfgen import canvas
@@ -29,7 +200,7 @@ def get_logo_b64():
 def init():
     conn=sqlite3.connect(DB, check_same_thread=False)
     c=conn.cursor()
-    c.execute("CREATE TABLE IF NOT EXISTS bookings (id INTEGER PRIMARY KEY AUTOINCREMENT, sale_date TEXT, entry_date TEXT, exit_date TEXT, company TEXT, passengers TEXT, hotel TEXT, nights INTEGER, price_night REAL, hotel_total REAL, flight REAL, transport REAL, sell REAL, cost REAL, profit REAL, voucher TEXT, notes TEXT, airline TEXT, emp TEXT, flight_dep_time TEXT, flight_ret_time TEXT, room_type TEXT, transport_company TEXT, flight_no_dep TEXT, flight_no_ret TEXT, room_count INTEGER)")
+    c.execute("CREATE TABLE IF NOT EXISTS bookings (id INTEGER PRIMARY KEY AUTOINCREMENT, sale_date TEXT, entry_date TEXT, exit_date TEXT, company TEXT, passengers TEXT, pax_count INTEGER DEFAULT 1, hotel TEXT, nights INTEGER, price_night REAL, hotel_total REAL, flight REAL, transport REAL, sell REAL, cost REAL, profit REAL, voucher TEXT, notes TEXT, airline TEXT, emp TEXT, flight_dep_time TEXT, flight_ret_time TEXT, room_type TEXT, transport_company TEXT, flight_no_dep TEXT, flight_no_ret TEXT, room_count INTEGER)")
     c.execute("CREATE TABLE IF NOT EXISTS agents (name TEXT UNIQUE)")
     c.execute("CREATE TABLE IF NOT EXISTS hotels (name TEXT UNIQUE)")
     c.execute("CREATE TABLE IF NOT EXISTS airlines (name TEXT UNIQUE)")
@@ -44,7 +215,6 @@ def init():
                 c.execute(f"ALTER TABLE bookings ADD COLUMN {col} TEXT")
     conn.commit()
     conn.close()
-
 init()
 
 if "pending" not in st.session_state:
@@ -59,25 +229,19 @@ if "search_mode" not in st.session_state:
 if st.session_state.do_clear:
     for k in ["emp","pas","comp","hotel","pn","fl","tr","sell","airline","notes","vno","nights","ed","sd","dep_time","ret_time","flight_no_dep","flight_no_ret","room_type","transport_co","room_count"]:
         if k in st.session_state:
-            try:
-                del st.session_state[k]
-            except:
-                pass
+            try: del st.session_state[k]
+            except: pass
     st.session_state.do_clear=False
     st.session_state.pending=None
 
 def to_f(s):
-    try:
-        return float(str(s).replace(",","").strip()) if str(s).strip()!="" else 0.0
-    except:
-        return 0.0
+    try: return float(str(s).replace(",","").strip()) if str(s).strip()!="" else 0.0
+    except: return 0.0
 
 def smart_match(input_val, full_list, upper_list):
     v = input_val.strip().upper()
-    if not v or v=="0":
-        return "", True
-    if v in upper_list:
-        return full_list[upper_list.index(v)], True
+    if not v or v=="0": return "", True
+    if v in upper_list: return full_list[upper_list.index(v)], True
     return input_val, False
 
 def sanitize_filename(name):
@@ -124,41 +288,27 @@ def generate_invoice_pdf(data, save_path=None):
     y = height-HEADER_H-40
     c.setFont("Helvetica-Bold", 13)
     c.drawString(30, y, f"Agent: {data.get('company','')}")
-    y-=24
-    c.drawString(30, y, f"Invoice No: {booking_num}")
-    y-=24
-    c.drawString(30, y, f"Hotel: {data.get('hotel','')}")
-    y-=24
-    c.drawString(30, y, f"Check-in: {data.get('entry_date','')} | Check-out: {data.get('exit_date','')}")
-    y-=24
-    c.drawString(30, y, f"Room Type: {data.get('room_type','')} | Rooms: {data.get('room_count',1)}")
-    y-=32
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(30, y, "Passengers:")
-    y-=20
+    y-=24; c.drawString(30, y, f"Invoice No: {booking_num}"); y-=24
+    c.drawString(30, y, f"Hotel: {data.get('hotel','')}"); y-=24
+    c.drawString(30, y, f"Check-in: {data.get('entry_date','')} | Check-out: {data.get('exit_date','')}"); y-=24
+    c.drawString(30, y, f"Room Type: {data.get('room_type','')} | Rooms: {data.get('room_count',1)}"); y-=32
+    c.setFont("Helvetica-Bold", 12); c.drawString(30, y, "Passengers:"); y-=20
     c.setFont("Helvetica", 11)
     for name in str(data.get('passengers','')).strip().split('\n'):
         if name.strip():
-            c.drawString(45, y, f"- {name.strip()}")
-            y-=18
+            c.drawString(45, y, f"- {name.strip()}"); y-=18
             if y < 150:
-                c.showPage()
-                y = height-50
-                c.setFont("Helvetica", 11)
+                c.showPage(); y = height-50; c.setFont("Helvetica", 11)
     y-=30
-    c.setFillColorRGB(0.95,0.95,0.95)
-    c.rect(30, y-15, width-60, 60, fill=1, stroke=0)
-    c.setFillColorRGB(0.06, 0.18, 0.36)
-    c.setFont("Helvetica-Bold", 22)
+    c.setFillColorRGB(0.95,0.95,0.95); c.rect(30, y-15, width-60, 60, fill=1, stroke=0)
+    c.setFillColorRGB(0.06, 0.18, 0.36); c.setFont("Helvetica-Bold", 22)
     c.drawString(40, y+15, f"Selling Price: ${float(data.get('sell',0)):,.2f}")
-    c.showPage()
-    c.save()
-    pdf_bytes=buffer.getvalue()
-    buffer.close()
+    c.showPage(); c.save()
+    pdf_bytes=buffer.getvalue(); buffer.close()
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        with open(save_path, "wb") as f:
-            f.write(pdf_bytes)
+        with open(save_path, "wb") as f: f.write(pdf_bytes)
+        upload_drive(save_path)
     return pdf_bytes
 
 def generate_voucher_pdf(data, save_path=None):
@@ -166,85 +316,56 @@ def generate_voucher_pdf(data, save_path=None):
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
     HEADER_H = 135
-    c.setFillColorRGB(0.06, 0.18, 0.36)
-    c.rect(0, height-HEADER_H, width, HEADER_H, fill=1, stroke=0)
-    c.setFillColorRGB(1, 0.55, 0)
-    c.rect(0, height-HEADER_H-6, width, 6, fill=1, stroke=0)
+    c.setFillColorRGB(0.06, 0.18, 0.36); c.rect(0, height-HEADER_H, width, HEADER_H, fill=1, stroke=0)
+    c.setFillColorRGB(1, 0.55, 0); c.rect(0, height-HEADER_H-6, width, 6, fill=1, stroke=0)
     has_logo = os.path.exists(LOGO_PATH)
     if has_logo:
         try:
             c.drawImage(LOGO_PATH, 20, height-HEADER_H+12, width=110, height=110, preserveAspectRatio=True, mask='auto')
-            c.setFillColorRGB(1,1,1)
-            c.setFont("Helvetica-Bold", 26)
+            c.setFillColorRGB(1,1,1); c.setFont("Helvetica-Bold", 26)
             c.drawString(145, height-55, "HOTRIGO - BOOKING VOUCHER")
             c.setFont("Helvetica", 11)
             c.drawString(145, height-75, f"tourism2020-hotrigo | {datetime.now().strftime('%d-%m-%Y')}")
         except:
-            c.setFillColorRGB(1,1,1)
-            c.setFont("Helvetica-Bold", 26)
+            c.setFillColorRGB(1,1,1); c.setFont("Helvetica-Bold", 26)
             c.drawString(30, height-60, "HOTRIGO - BOOKING VOUCHER")
     else:
-        c.setFillColorRGB(1,1,1)
-        c.setFont("Helvetica-Bold", 26)
+        c.setFillColorRGB(1,1,1); c.setFont("Helvetica-Bold", 26)
         c.drawString(30, height-60, "HOTRIGO - BOOKING VOUCHER")
-    c.setFillColorRGB(0,0,0)
-    y = height-HEADER_H-30
-    c.setFillColorRGB(0.96,0.96,0.96)
-    c.rect(30, y-45, width-60, 45, fill=1, stroke=0)
-    c.setFillColorRGB(0,0,0)
-    c.setFont("Helvetica-Bold", 11)
+    c.setFillColorRGB(0,0,0); y = height-HEADER_H-30
+    c.setFillColorRGB(0.96,0.96,0.96); c.rect(30, y-45, width-60, 45, fill=1, stroke=0)
+    c.setFillColorRGB(0,0,0); c.setFont("Helvetica-Bold", 11)
     c.drawString(40, y-10, f"Booking Date: {data.get('sale_date','')}")
-    c.drawString(40, y-30, f"Booking No: {data.get('booking_no','')}")
-    y -= 75
-    c.setFont("Helvetica-Bold", 13)
-    c.drawString(30, y, "Guest Names:")
-    y -= 20
+    c.drawString(40, y-30, f"Booking No: {data.get('booking_no','')}"); y -= 75
+    c.setFont("Helvetica-Bold", 13); c.drawString(30, y, "Guest Names:"); y -= 20
     c.setFont("Helvetica", 12)
     for idx, name in enumerate(str(data.get('passengers','')).strip().split('\n'), 1):
-        if name.strip():
-            c.drawString(40, y, f"{idx}. {name.strip()}")
-            y -= 18
-    y -= 15
-    c.line(30, y, width-30, y)
-    y -= 25
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(30, y, "Hotel Details:")
-    y -= 22
+        if name.strip(): c.drawString(40, y, f"{idx}. {name.strip()}"); y -= 18
+    y -= 15; c.line(30, y, width-30, y); y -= 25
+    c.setFont("Helvetica-Bold", 12); c.drawString(30, y, "Hotel Details:"); y -= 22
     c.setFont("Helvetica", 11)
     rc = data.get('room_count',1)
-    c.drawString(40, y, f"Hotel: {data.get('hotel','')} - Rooms: {rc}")
-    y -= 18
-    c.drawString(40, y, f"Room Type: {data.get('room_type','')}")
-    y -= 18
+    c.drawString(40, y, f"Hotel: {data.get('hotel','')} - Rooms: {rc}"); y -= 18
+    c.drawString(40, y, f"Room Type: {data.get('room_type','')}"); y -= 18
     c.drawString(40, y, f"Check-in: {data.get('entry_date','')} | Check-out: {data.get('exit_date','')} | Nights: {data.get('nights','')}")
     y -= 30
     notes = data.get('notes','') or ''
     if notes.strip():
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(30, y, "Note:")
-        y-=18
-        c.setFont("Helvetica", 11)
+        c.setFont("Helvetica-Bold", 11); c.drawString(30, y, "Note:"); y-=18; c.setFont("Helvetica", 11)
         for line in notes.split('\n'):
-            if line.strip():
-                c.drawString(40, y, line.strip()[:100])
-                y-=18
-    c.showPage()
-    c.save()
-    pdf_bytes=buffer.getvalue()
-    buffer.close()
+            if line.strip(): c.drawString(40, y, line.strip()[:100]); y-=18
+    c.showPage(); c.save()
+    pdf_bytes=buffer.getvalue(); buffer.close()
     if save_path:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        with open(save_path, "wb") as f:
-            f.write(pdf_bytes)
+        with open(save_path, "wb") as f: f.write(pdf_bytes)
+        upload_drive(save_path)
     return pdf_bytes
 
 def generate_agent_statement_excel(agent_name, bookings_df, payments_df):
     buffer = io.BytesIO()
-    try:
-        import openpyxl
-    except:
-        os.system("pip install openpyxl")
-        import openpyxl
+    try: import openpyxl
+    except: os.system("pip install openpyxl"); import openpyxl
     total_sales = bookings_df['sell'].sum() if not bookings_df.empty and 'sell' in bookings_df.columns else 0
     total_payments = payments_df['amount'].sum() if not payments_df.empty and 'amount' in payments_df.columns else 0
     balance = total_sales - total_payments
@@ -253,38 +374,20 @@ def generate_agent_statement_excel(agent_name, bookings_df, payments_df):
         book_export = bookings_df[cols_exist].copy()
         rename_map = {'id':'رقم الحجز','passengers':'المسافر','room_count':'عدد الغرف','room_type':'نوع الغرف','hotel':'الفندق','entry_date':'الدخول','exit_date':'الخروج','nights':'ليالي','sell':'المبيع $','notes':'ملاحظة الحجز'}
         book_export.rename(columns={k:v for k,v in rename_map.items() if k in book_export.columns}, inplace=True)
-    else:
-        book_export = pd.DataFrame()
+    else: book_export = pd.DataFrame()
     if not payments_df.empty:
         cols_exist = [c for c in ['pay_date','amount','note'] if c in payments_df.columns]
         pay_export = payments_df[cols_exist].copy()
         rename_map = {'pay_date':'تاريخ الدفعة','amount':'قيمة الدفعة','note':'ملاحظة الدفعة'}
         pay_export.rename(columns={k:v for k,v in rename_map.items() if k in pay_export.columns}, inplace=True)
-    else:
-        pay_export = pd.DataFrame()
+    else: pay_export = pd.DataFrame()
     summary_df = pd.DataFrame([{'الوكيل': agent_name, 'اجمالي الحجوزات': total_sales, 'اجمالي الدفعات': total_payments, 'الرصيد المتبقي': balance}])
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        if not book_export.empty:
-            book_export.to_excel(writer, sheet_name='الحجوزات', index=False)
-        else:
-            pd.DataFrame([{'ملاحظة':'لا يوجد حجوزات'}]).to_excel(writer, sheet_name='الحجوزات', index=False)
-        if not pay_export.empty:
-            pay_export.to_excel(writer, sheet_name='الدفعات', index=False)
-        else:
-            pd.DataFrame([{'ملاحظة':'لا يوجد دفعات'}]).to_excel(writer, sheet_name='الدفعات', index=False)
+        if not book_export.empty: book_export.to_excel(writer, sheet_name='الحجوزات', index=False)
+        else: pd.DataFrame([{'ملاحظة':'لا يوجد حجوزات'}]).to_excel(writer, sheet_name='الحجوزات', index=False)
+        if not pay_export.empty: pay_export.to_excel(writer, sheet_name='الدفعات', index=False)
+        else: pd.DataFrame([{'ملاحظة':'لا يوجد دفعات'}]).to_excel(writer, sheet_name='الدفعات', index=False)
         summary_df.to_excel(writer, sheet_name='الملخص', index=False)
-        for sheet in writer.sheets.values():
-            for col in sheet.columns:
-                max_len = 0
-                col_letter = col[0].column_letter
-                for cell in col:
-                    try:
-                        l = len(str(cell.value)) if cell.value is not None else 0
-                        if l > max_len:
-                            max_len = l
-                    except:
-                        pass
-                sheet.column_dimensions[col_letter].width = min(max_len+4, 40)
     buffer.seek(0)
     return buffer.getvalue(), total_sales, total_payments, balance
 
@@ -294,131 +397,80 @@ def generate_agent_statement_pdf(agent_name, bookings_df, payments_df):
     c = canvas.Canvas(buffer, pagesize=pagesize_land)
     width, height = pagesize_land
     HEADER_H = 95
-    c.setFillColorRGB(0.06, 0.18, 0.36)
-    c.rect(0, height-HEADER_H, width, HEADER_H, fill=1, stroke=0)
-    c.setFillColorRGB(1, 0.55, 0)
-    c.rect(0, height-HEADER_H-5, width, 5, fill=1, stroke=0)
+
+    total_sales = float(bookings_df['sell'].sum()) if 'sell' in bookings_df and not bookings_df.empty else 0
+    total_payments = float(payments_df['amount'].sum()) if not payments_df.empty and 'amount' in payments_df else 0
+    balance = total_sales - total_payments
+
+    c.setFillColorRGB(0.06, 0.18, 0.36); c.rect(0, height-HEADER_H, width, HEADER_H, fill=1, stroke=0)
+    c.setFillColorRGB(1, 0.55, 0); c.rect(0, height-HEADER_H-5, width, 5, fill=1, stroke=0)
     has_logo = os.path.exists(LOGO_PATH)
     if has_logo:
-        try:
-            c.drawImage(LOGO_PATH, 25, height-88, width=80, height=75, preserveAspectRatio=True, mask='auto')
-        except:
-            pass
-    c.setFillColorRGB(1,1,1)
-    c.setFont("Helvetica-Bold", 20)
+        try: c.drawImage(LOGO_PATH, 25, height-88, width=80, height=75, preserveAspectRatio=True, mask='auto')
+        except: pass
+    c.setFillColorRGB(1,1,1); c.setFont("Helvetica-Bold", 20)
     c.drawString(120 if has_logo else 30, height-38, f"AGENT STATEMENT - {agent_name}")
     c.setFont("Helvetica", 10)
     c.drawString(120 if has_logo else 30, height-58, f"Date: {datetime.now().strftime('%d/%m/%Y')} | {len(bookings_df)} bookings | tourism2020-hotrigo")
+    c.setFillColorRGB(0,0,0); y = height-HEADER_H-25
+    c.setFont("Helvetica-Bold", 11); c.drawString(30, y, f"Agent: {agent_name}"); y-=25
+
+    # ===== فوق - مربع كبير =====
+    c.setFillColorRGB(1, 0.95, 0.85); c.rect(30, y-50, width-60, 50, fill=1, stroke=0)
+    c.setStrokeColorRGB(0.8,0,0); c.setLineWidth(1); c.rect(30, y-50, width-60, 50, fill=0, stroke=1)
+    c.setFillColorRGB(0,0,0); c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y-15, f"Total Sales: ${total_sales:.2f} | Total Payments: ${total_payments:.2f} | Balance: ${balance:.2f}")
+    c.setFillColorRGB(0.8,0,0) if balance>0 else c.setFillColorRGB(0,0.5,0)
+    c.setFont("Helvetica-Bold", 16); c.drawString(40, y-38, f"REMAINING BALANCE: ${balance:.2f}")
     c.setFillColorRGB(0,0,0)
-    y = height-HEADER_H-25
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(30, y, f"Agent: {agent_name}")
-    y-=20
-    left = 30
-    right = width - 30
-    usable = right - left
-    col_pass = left + 5
-    col_rooms = left + 185
-    col_type = left + 240
-    col_checkin = left + 320
-    col_checkout = left + 415
-    col_sell = left + 510
-    col_note = left + 585
-    c.setFillColorRGB(0.9,0.9,0.9)
-    c.rect(left, y-16, usable, 18, fill=1, stroke=0)
-    c.setFillColorRGB(0,0,0)
-    c.setFont("Helvetica-Bold", 9)
-    c.drawString(col_pass, y-12, "Passenger")
-    c.drawString(col_rooms, y-12, "Rooms")
-    c.drawString(col_type, y-12, "Type")
-    c.drawString(col_checkin, y-12, "Check-in")
-    c.drawString(col_checkout, y-12, "Check-out")
-    c.drawString(col_sell, y-12, "Sell $")
-    c.drawString(col_note, y-12, "Note")
-    y-=32
-    total_sales=0
-    c.setFont("Helvetica", 9)
+    y -= 75
+
+    left = 30; right = width - 30; usable = right - left
+    col_book = left + 5; col_pass = left + 75; col_rooms = left + 195; col_type = left + 235; col_checkin = left + 290; col_checkout = left + 375; col_sell = left + 465; col_note = left + 530
+    c.setFillColorRGB(0.9,0.9,0.9); c.rect(left, y-16, usable, 18, fill=1, stroke=0)
+    c.setFillColorRGB(0,0,0); c.setFont("Helvetica-Bold", 9)
+    c.drawString(col_book, y-12, "Booking No"); c.drawString(col_pass, y-12, "Passenger"); c.drawString(col_rooms, y-12, "Rooms"); c.drawString(col_type, y-12, "Type"); c.drawString(col_checkin, y-12, "Check-in"); c.drawString(col_checkout, y-12, "Check-out"); c.drawString(col_sell, y-12, "Sell"); c.drawString(col_note, y-12, "Note")
+    y-=32; c.setFont("Helvetica", 9)
     for _, row in bookings_df.iterrows():
-        if y < 110:
-            c.showPage()
-            y = height-40
-            c.setFont("Helvetica-Bold", 9)
-            c.setFillColorRGB(0.9,0.9,0.9)
-            c.rect(left, y-16, usable, 18, fill=1, stroke=0)
-            c.setFillColorRGB(0,0,0)
-            c.drawString(col_pass, y-12, "Passenger")
-            c.drawString(col_rooms, y-12, "Rooms")
-            c.drawString(col_type, y-12, "Type")
-            c.drawString(col_checkin, y-12, "Check-in")
-            c.drawString(col_checkout, y-12, "Check-out")
-            c.drawString(col_sell, y-12, "Sell $")
-            c.drawString(col_note, y-12, "Note")
-            y-=32
-            c.setFont("Helvetica", 9)
-        pas = str(row['passengers']).split('\n')[0][:22] if row['passengers'] else ""
+        if y < 150:
+            c.showPage(); y = height-40; c.setFont("Helvetica-Bold", 9)
+            c.setFillColorRGB(0.9,0.9,0.9); c.rect(left, y-16, usable, 18, fill=1, stroke=0)
+            c.setFillColorRGB(0,0,0); c.drawString(col_book, y-12, "Booking No"); c.drawString(col_pass, y-12, "Passenger"); c.drawString(col_rooms, y-12, "Rooms"); c.drawString(col_type, y-12, "Type"); c.drawString(col_checkin, y-12, "Check-in"); c.drawString(col_checkout, y-12, "Check-out"); c.drawString(col_sell, y-12, "Sell"); c.drawString(col_note, y-12, "Note")
+            y-=32; c.setFont("Helvetica", 9)
+        bno = str(row['booking_no']) if 'booking_no' in row and pd.notna(row['booking_no']) and str(row['booking_no']).strip()!="" else f"HTG-{int(row['id']):06d}" if 'id' in row and pd.notna(row['id']) else ""
+        pas = str(row['passengers']).split('\n')[0][:20] if 'passengers' in row and pd.notna(row['passengers']) else ""
         rc = str(row['room_count']) if 'room_count' in row and pd.notna(row['room_count']) else "1"
-        rtype = str(row['room_type'])[:10] if 'room_type' in row and row['room_type'] else ""
-        entry = str(row['entry_date'])[:10]
-        exit_d = str(row['exit_date'])[:10]
-        sell = float(row['sell']) if row['sell'] else 0
-        note = str(row['notes'])[:45] if 'notes' in row and row['notes'] else ""
-        total_sales+=sell
-        c.drawString(col_pass, y, pas)
-        c.drawString(col_rooms, y, rc)
-        c.drawString(col_type, y, rtype)
-        c.drawString(col_checkin, y, entry)
-        c.drawString(col_checkout, y, exit_d)
-        c.drawString(col_sell, y, f"{sell:,.0f}")
-        c.drawString(col_note, y, note)
-        y-=13
-    y-=12
-    c.line(left, y, right, y)
-    y-=22
-    c.setFont("Helvetica-Bold", 11)
-    c.drawString(left, y, "Payments:")
-    y-=20
-    c.setFillColorRGB(0.9,0.9,0.9)
-    c.rect(left, y-16, usable, 18, fill=1, stroke=0)
-    c.setFillColorRGB(0,0,0)
-    c.setFont("Helvetica-Bold", 9)
-    c.drawString(left+5, y-12, "Pay Date")
-    c.drawString(left+125, y-12, "Amount")
-    c.drawString(left+255, y-12, "Note")
-    y-=28
-    c.setFont("Helvetica", 9)
-    total_payments = 0
+        rtype = str(row['room_type'])[:10] if 'room_type' in row and pd.notna(row['room_type']) else ""
+        entry = str(row['entry_date'])[:10] if 'entry_date' in row else ""
+        exit_d = str(row['exit_date'])[:10] if 'exit_date' in row else ""
+        sell = float(row['sell']) if 'sell' in row and pd.notna(row['sell']) else 0
+        note = str(row['notes'])[:18] if 'notes' in row and pd.notna(row['notes']) else ""
+        c.drawString(col_book, y, bno[:12]); c.drawString(col_pass, y, pas); c.drawString(col_rooms, y, rc); c.drawString(col_type, y, rtype); c.drawString(col_checkin, y, entry); c.drawString(col_checkout, y, exit_d); c.drawString(col_sell, y, f"{sell:.0f}"); c.drawString(col_note, y, note)
+        y-=12; c.line(left, y, right, y); y-=22
+    y-=12; c.line(left, y, right, y); y-=22; c.setFont("Helvetica-Bold", 11); c.drawString(left, y, "Payments:"); y-=20
+    c.setFillColorRGB(0.9,0.9,0.9); c.rect(left, y-16, usable, 18, fill=1, stroke=0); c.setFillColorRGB(0,0,0); c.setFont("Helvetica-Bold", 9)
+    c.drawString(left+5, y-12, "Pay Date"); c.drawString(left+125, y-12, "Amount"); c.drawString(left+300, y-12, "Note")
+    y-=32; c.setFont("Helvetica", 9)
     if not payments_df.empty:
         for _, p in payments_df.iterrows():
-            if y < 60:
-                c.showPage()
-                y = height-40
-                c.setFont("Helvetica", 9)
-            pd_date = str(p['pay_date'])[:10]
-            amt = float(p['amount']) if p['amount'] else 0
-            pnote = str(p['note'])[:90] if p['note'] else ""
-            total_payments+=amt
-            c.drawString(left+5, y, pd_date)
-            c.drawString(left+125, y, f"${amt:,.2f}")
-            c.drawString(left+255, y, pnote)
-            y-=16
-    else:
-        c.drawString(left+5, y, "No payments yet")
-        y-=16
-    y-=12
-    c.line(left, y, right, y)
-    y-=22
-    balance = total_sales - total_payments
-    c.setFont("Helvetica-Bold", 11)
-    c.setFillColorRGB(0,0,0)
-    c.drawString(left, y, f"Total Sales: ${total_sales:,.2f} | Payments: ${total_payments:,.2f}")
-    y-=20
+            if y < 140: c.showPage(); y = height-40; c.setFont("Helvetica", 9)
+            pd_date = str(p['pay_date'])[:10]; amt = float(p['amount']) if p['amount'] else 0
+            c.drawString(left+5, y, pd_date); c.drawString(left+125, y, f"${amt:.2f}"); c.drawString(left+300, y, str(p['note'])[:40] if pd.notna(p['note']) else "")
+            y-=12; c.line(left, y, right, y); y-=16
+    else: c.drawString(left+5, y, "No payments yet"); y-=16
+
+    # ===== تحت - مربع كبير =====
+    y-=20; c.line(left, y, right, y); y-=40
+    if y < 90: c.showPage(); y = height-60
+    c.setFillColorRGB(1, 0.95, 0.85); c.rect(30, y-50, width-60, 50, fill=1, stroke=0)
+    c.setStrokeColorRGB(0.8,0,0); c.setLineWidth(1); c.rect(30, y-50, width-60, 50, fill=0, stroke=1)
+    c.setFillColorRGB(0,0,0); c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y-15, f"Total Sales: ${total_sales:.2f} | Total Payments: ${total_payments:.2f} | Balance: ${balance:.2f}")
     c.setFillColorRGB(0.8,0,0) if balance>0 else c.setFillColorRGB(0,0.5,0)
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(left, y, f"BALANCE DUE: ${balance:,.2f}")
-    c.showPage()
-    c.save()
-    pdf_bytes=buffer.getvalue()
-    buffer.close()
+    c.setFont("Helvetica-Bold", 16); c.drawString(40, y-38, f"REMAINING BALANCE: ${balance:.2f}")
+
+    c.showPage(); c.save()
+    pdf_bytes=buffer.getvalue(); buffer.close()
     return pdf_bytes, total_sales, total_payments, balance
 
 st.set_page_config(page_title="hotrigo", page_icon="✈️", layout="wide")
@@ -429,7 +481,6 @@ hotels_for_js=[x[0] for x in conn.execute("SELECT name FROM hotels ORDER BY name
 airlines_for_js=[x[0] for x in conn.execute("SELECT name FROM airlines ORDER BY name").fetchall()]
 transport_for_js=[x[0] for x in conn.execute("SELECT name FROM transport_companies ORDER BY name").fetchall()]
 conn.close()
-
 agents_upper=[a.upper() for a in agents_for_js]
 hotels_upper=[h.upper() for h in hotels_for_js]
 airlines_upper=[a.upper() for a in airlines_for_js]
@@ -442,227 +493,25 @@ const AGENTS = __AGENTS__;
 const HOTELS = __HOTELS__;
 const AIRLINES = __AIRLINES__;
 const TRANSPORT = __TRANSPORT__;
-function isSearchField(input){
-  if(!input) return false;
-  const ph = (input.getAttribute('placeholder')||'').toLowerCase();
-  const cont = input.closest('div[data-testid="stTextInput"], div[data-testid="stTextArea"]');
-  const txt = cont? (cont.innerText||'').toLowerCase() : '';
-  return ph.includes('search') || txt.includes('search');
-}
-function killAutofill(){
-  doc.querySelectorAll('div[data-testid="stTextInput"] input, div[data-testid="stTextArea"] textarea, div[data-testid="stNumberInput"] input').forEach(inp=>{
-    if(isSearchField(inp)) return;
-    if(inp.type==='hidden') return;
-    inp.setAttribute('autocomplete','off');
-    inp.removeAttribute('list');
-  });
-  doc.querySelectorAll('datalist').forEach(d=>d.remove());
-}
+function isSearchField(input){if(!input) return false; const ph=(input.getAttribute('placeholder')||'').toLowerCase(); const cont=input.closest('div[data-testid="stTextInput"], div[data-testid="stTextArea"]'); const txt=cont?(cont.innerText||'').toLowerCase():''; return ph.includes('search')||txt.includes('search');}
+function killAutofill(){doc.querySelectorAll('div[data-testid="stTextInput"] input, div[data-testid="stTextArea"] textarea, div[data-testid="stNumberInput"] input').forEach(inp=>{if(isSearchField(inp)) return; if(inp.type==='hidden') return; inp.setAttribute('autocomplete','off'); inp.removeAttribute('list');}); doc.querySelectorAll('datalist').forEach(d=>d.remove());}
 killAutofill(); setTimeout(killAutofill,200); setInterval(killAutofill,1500);
-function isCalendarOpen(){ return doc.querySelector('div[data-baseweb="calendar"], div[data-baseweb="datepicker"]')!== null; }
-function getActiveContainer(){
-  const dlg = doc.querySelector('div[data-testid="stDialog"], div[role="dialog"]');
-  if(dlg && dlg.offsetParent!==null && dlg.querySelector('input, textarea')){
-    return dlg;
-  }
-  return doc;
-}
-function getFieldType(input){
-  if(isSearchField(input)) return 'SEARCH';
-  const cont = input.closest('div[data-testid="stTextInput"], div[data-testid="stTextArea"], div[data-testid="stDateInput"], div[data-testid="stNumberInput"]');
-  if (!cont) return null;
-  const testId = cont.getAttribute('data-testid') || '';
-  if (testId.includes('stDateInput')) return 'DATE';
-  if (testId.includes('stNumberInput')) return 'NUMBER';
-  const txt = (cont.innerText || '').toLowerCase();
-  if (txt.includes('agent')) return 'AGENT';
-  if (txt.includes('hotel')) return 'HOTEL';
-  if (txt.includes('airline')) return 'AIRLINE';
-  if (txt.includes('transport')) return 'TRANSPORT';
-  if (txt.includes('passengers')) return 'PASSENGERS';
-  if (txt.includes('room type')) return 'ROOM';
-  if (txt.includes('number of rooms')) return 'ROOMS';
-  return 'OTHER';
-}
-function getFields(){
-  const container = getActiveContainer();
-  const els=Array.from(container.querySelectorAll('input:not([type=hidden]), textarea'));
-  return els.filter(e=>e.offsetParent!==null &&!e.disabled && e.type!=='checkbox' && e.type!=='radio' && e.getClientRects().length>0);
-}
-function setNativeValue(input,value){
-  const lastValue=input.value; input.value=value;
-  if(input._valueTracker)input._valueTracker.setValue(lastValue);
-  try{ const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input),'value').set; setter.call(input,value); }catch(e){}
-  input.dispatchEvent(new Event('input',{bubbles:true}));
-  input.dispatchEvent(new Event('change',{bubbles:true}));
-  if(getFieldType(input)!=='PASSENGERS'){
-    setTimeout(()=>{ input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})); },20);
-  }
-}
-function insertNewLinePassengers(textarea){
-  const start = textarea.selectionStart;
-  const end = textarea.selectionEnd;
-  const text = textarea.value;
-  const newText = text.substring(0, start) + "\\n" + text.substring(end);
-  const newPos = start + 1;
-  const lastValue = textarea.value;
-  textarea.value = newText;
-  if(textarea._valueTracker) textarea._valueTracker.setValue(lastValue);
-  try{ const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(textarea),'value').set; setter.call(textarea, newText); }catch(e){}
-  textarea.dispatchEvent(new Event('input',{bubbles:true}));
-  textarea.dispatchEvent(new Event('change',{bubbles:true}));
-  textarea.selectionStart = textarea.selectionEnd = newPos;
-  textarea.focus();
-}
-function findNearest(active,dir){
-  const fields=getFields();
-  const ar=active.getBoundingClientRect();
-  const acx = ar.left + ar.width/2;
-  const acy = ar.top + ar.height/2;
-  let candidates=[];
-  for(let f of fields){
-    if(f===active)continue;
-    const r=f.getBoundingClientRect();
-    const cx = r.left + r.width/2;
-    const cy = r.top + r.height/2;
-    if(dir==='left' && r.left < ar.left - 5){
-      candidates.push({f, dist: acx - cx, cy: Math.abs(acy-cy)});
-    }
-    if(dir==='right' && r.left > ar.right + 5){
-      candidates.push({f, dist: cx - acx, cy: Math.abs(acy-cy)});
-    }
-    if(dir==='down' && r.top > ar.top + 5){
-      candidates.push({f, dist: cy - acy, cx: Math.abs(acx-cx)});
-    }
-    if(dir==='up' && r.bottom < ar.bottom - 5){
-      candidates.push({f, dist: acy - cy, cx: Math.abs(acx-cx)});
-    }
-  }
-  if(!candidates.length) return null;
-  if(dir==='left' || dir==='right'){
-    candidates.sort((a,b)=>{ if(Math.abs(a.cy-b.cy)>20) return a.cy-b.cy; return a.dist-b.dist; });
-  } else {
-    candidates.sort((a,b)=>{ if(Math.abs(a.cx-b.cx)>80) return a.cx-b.cx; return a.dist-b.dist; });
-  }
-  return candidates[0].f;
-}
-function moveToNext(input){
-  const fields=getFields(); let idx=fields.indexOf(input);
-  if(idx!==-1 && idx+1<fields.length){ setTimeout(()=>{ const n=fields[idx+1]; if(n){n.focus(); try{n.select();}catch(e){}} },60); }
-}
-function moveToPrev(input){
-  const fields=getFields(); let idx=fields.indexOf(input);
-  if(idx>0){ setTimeout(()=>{ const p=fields[idx-1]; if(p){p.focus(); try{p.select();}catch(e){}} },60); }
-}
+function isCalendarOpen(){return doc.querySelector('div[data-baseweb="calendar"], div[data-baseweb="datepicker"]')!== null;}
+function getActiveContainer(){const dlg=doc.querySelector('div[data-testid="stDialog"], div[role="dialog"]'); if(dlg&&dlg.offsetParent!==null&&dlg.querySelector('input, textarea')){return dlg;} return doc;}
+function getFieldType(input){if(isSearchField(input)) return 'SEARCH'; const cont=input.closest('div[data-testid="stTextInput"], div[data-testid="stTextArea"], div[data-testid="stDateInput"], div[data-testid="stNumberInput"]'); if(!cont) return null; const testId=cont.getAttribute('data-testid')||''; if(testId.includes('stDateInput')) return 'DATE'; if(testId.includes('stNumberInput')) return 'NUMBER'; const txt=(cont.innerText||'').toLowerCase(); if(txt.includes('agent')) return 'AGENT'; if(txt.includes('hotel')) return 'HOTEL'; if(txt.includes('airline')) return 'AIRLINE'; if(txt.includes('transport')) return 'TRANSPORT'; if(txt.includes('passengers')) return 'PASSENGERS'; if(txt.includes('room type')) return 'ROOM'; return 'OTHER';}
+function getFields(){const container=getActiveContainer(); const els=Array.from(container.querySelectorAll('input:not([type=hidden]), textarea')); return els.filter(e=>e.offsetParent!==null&&!e.disabled&&e.type!=='checkbox'&&e.type!=='radio'&&e.getClientRects().length>0);}
+function setNativeValue(input,value){const lastValue=input.value; input.value=value; if(input._valueTracker)input._valueTracker.setValue(lastValue); try{const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input),'value').set; setter.call(input,value);}catch(e){} input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true})); if(getFieldType(input)!=='PASSENGERS'){setTimeout(()=>{input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));},20);}}
+function insertNewLinePassengers(textarea){const start=textarea.selectionStart; const end=textarea.selectionEnd; const text=textarea.value; const newText=text.substring(0,start)+"\\n"+text.substring(end); const newPos=start+1; const lastValue=textarea.value; textarea.value=newText; if(textarea._valueTracker)textarea._valueTracker.setValue(lastValue); try{const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(textarea),'value').set; setter.call(textarea,newText);}catch(e){} textarea.dispatchEvent(new Event('input',{bubbles:true})); textarea.dispatchEvent(new Event('change',{bubbles:true})); textarea.selectionStart=textarea.selectionEnd=newPos; textarea.focus();}
+function findNearest(active,dir){const fields=getFields(); const ar=active.getBoundingClientRect(); const acx=ar.left+ar.width/2; const acy=ar.top+ar.height/2; let candidates=[]; for(let f of fields){if(f===active)continue; const r=f.getBoundingClientRect(); const cx=r.left+r.width/2; const cy=r.top+r.height/2; if(dir==='left'&&r.left<ar.left-5){candidates.push({f,dist:acx-cx,cy:Math.abs(acy-cy)});} if(dir==='right'&&r.left>ar.right+5){candidates.push({f,dist:cx-acx,cy:Math.abs(acy-cy)});} if(dir==='down'&&r.top>ar.top+5){candidates.push({f,dist:cy-acy,cx:Math.abs(acx-cx)});} if(dir==='up'&&r.bottom<ar.bottom-5){candidates.push({f,dist:acy-cy,cx:Math.abs(acx-cx)});}} if(!candidates.length) return null; if(dir==='left'||dir==='right'){candidates.sort((a,b)=>{if(Math.abs(a.cy-b.cy)>20) return a.cy-b.cy; return a.dist-b.dist;});} else {candidates.sort((a,b)=>{if(Math.abs(a.cx-b.cx)>80) return a.cx-b.cx; return a.dist-b.dist;});} return candidates[0].f;}
+function moveToNext(input){const fields=getFields(); let idx=fields.indexOf(input); if(idx!==-1&&idx+1<fields.length){setTimeout(()=>{const n=fields[idx+1]; if(n){n.focus(); try{n.select();}catch(e){}}},60);}}
+function moveToPrev(input){const fields=getFields(); let idx=fields.indexOf(input); if(idx>0){setTimeout(()=>{const p=fields[idx-1]; if(p){p.focus(); try{p.select();}catch(e){}}},60);}}
 let activeList=null; let activeIndex=0; let currentInput=null;
-function closeList(){ if(activeList){activeList.remove(); activeList=null; activeIndex=0; currentInput=null;} }
-function highlightActive(){
-  if(!activeList) return;
-  Array.from(activeList.children).forEach((ch,i)=>{
-    ch.style.background = i===activeIndex? '#1976d2' : 'white';
-    ch.style.color = i===activeIndex? 'white' : 'black';
-  });
-}
-function createList(input,items){
-  closeList(); if(!items.length)return; currentInput=input; activeIndex=0;
-  const rect=input.getBoundingClientRect(); const div=doc.createElement('div');
-  div.style.position='fixed'; div.style.left=rect.left+'px'; div.style.top=(rect.bottom+2)+'px'; div.style.width=rect.width+'px';
-  div.style.maxHeight='220px'; div.style.overflowY='auto'; div.style.background='white'; div.style.border='1px solid #ccc';
-  div.style.borderRadius='6px'; div.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)'; div.style.zIndex='9999999999';
-  items.forEach((txt,i)=>{
-    const item=doc.createElement('div'); item.textContent=txt; item.style.padding='12px'; item.style.cursor='pointer';
-    item.style.background=i===0?'#1976d2':'white'; item.style.color=i===0?'white':'black'; item.style.fontWeight='bold'; item.style.borderBottom='1px solid #eee';
-    item.addEventListener('mousedown',(e)=>{ e.preventDefault(); e.stopPropagation(); setNativeValue(input,txt); closeList(); moveToNext(input); });
-    div.appendChild(item);
-  }); doc.body.appendChild(div); activeList=div;
-}
-doc.addEventListener('input',function(e){
-  const input=e.target; if(!input||input.tagName!=='INPUT')return;
-  if(isSearchField(input)) return;
-  const type=getFieldType(input);
-  if(type!=='AGENT' && type!=='HOTEL' && type!=='AIRLINE' && type!=='TRANSPORT') return;
-  const val=input.value.trim().toUpperCase(); if(val.length<1||val==="0"){closeList(); return;}
-  let list=type==='AGENT'?AGENTS:type==='HOTEL'?HOTELS:type==='AIRLINE'?AIRLINES:TRANSPORT;
-  if(!list ||!list.length) return;
-  let filtered=list.filter(x=>x.toUpperCase().startsWith(val)).slice(0,8);
-  if(filtered.length)createList(input,filtered); else closeList();
-});
-doc.addEventListener('keydown',function(e){
-  const active=doc.activeElement;
-  if(!active||(active.tagName!=='INPUT'&&active.tagName!=='TEXTAREA')) return;
-  if(isSearchField(active)) return;
-  if(isCalendarOpen()){ if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter','Escape'].includes(e.key)) return; }
-  const type=getFieldType(active);
-  const isAgentOrHotel = (type==='AGENT' || type==='HOTEL');
-  if(type==='PASSENGERS'){
-    if(e.key==='Enter'){
-      e.preventDefault(); e.stopPropagation();
-      insertNewLinePassengers(active);
-      return;
-    }
-    if(e.key==='ArrowDown' || e.key==='ArrowRight'){
-      e.preventDefault(); e.stopPropagation();
-      closeList();
-      const next = findNearest(active, e.key==='ArrowDown'? 'down' : 'right');
-      if(next){ next.focus(); try{next.select();}catch(e){} } else { moveToNext(active); }
-      return;
-    }
-    if(e.key==='ArrowUp' || e.key==='ArrowLeft'){
-      e.preventDefault(); e.stopPropagation();
-      closeList();
-      const prev = findNearest(active, e.key==='ArrowUp'? 'up' : 'left');
-      if(prev){ prev.focus(); } else { moveToPrev(active); }
-      return;
-    }
-    if(e.key==='Escape'){ closeList(); return; }
-    return;
-  }
-  if(isAgentOrHotel && activeList && currentInput===active){
-    if(e.key==='Enter'){
-      e.preventDefault(); e.stopPropagation();
-      const chosen = activeList.children[activeIndex]?.textContent || activeList.children[0]?.textContent;
-      if(chosen){ setNativeValue(active, chosen); }
-      closeList();
-      setTimeout(()=>{ moveToNext(active); },100);
-      return;
-    }
-    if(e.key==='ArrowDown'){
-      if(activeList){ e.preventDefault(); if(activeIndex < activeList.children.length-1){ activeIndex++; highlightActive(); } return; }
-    }
-    if(e.key==='ArrowUp'){
-      if(activeList){ e.preventDefault(); if(activeIndex>0){ activeIndex--; highlightActive(); } return; }
-    }
-    if(e.key==='Escape'){ closeList(); return; }
-  }
-  if(e.key==='Enter'){
-    e.preventDefault(); closeList(); moveToNext(active); return;
-  }
-  if(e.key==='ArrowRight'){
-    e.preventDefault(); closeList();
-    const t=findNearest(active,'right');
-    if(t){ t.focus(); try{t.select();}catch(e){} } else { moveToNext(active); }
-    return;
-  }
-  if(e.key==='ArrowLeft'){
-    e.preventDefault(); closeList();
-    const t=findNearest(active,'left');
-    if(t){ t.focus(); try{t.select();}catch(e){} } else { moveToPrev(active); }
-    return;
-  }
-  if(e.key==='ArrowDown'){
-    e.preventDefault(); closeList();
-    const t=findNearest(active,'down');
-    if(t){ t.focus(); try{t.select();}catch(e){} } else { moveToNext(active); }
-    return;
-  }
-  if(e.key==='ArrowUp'){
-    e.preventDefault(); closeList();
-    const t=findNearest(active,'up');
-    if(t){ t.focus(); try{t.select();}catch(e){} } else { moveToPrev(active); }
-    return;
-  }
-},true);
-doc.addEventListener('click',(e)=>{ if(activeList&&!activeList.contains(e.target)&&e.target!==currentInput)closeList(); });
+function closeList(){if(activeList){activeList.remove(); activeList=null; activeIndex=0; currentInput=null;}}
+function highlightActive(){if(!activeList) return; Array.from(activeList.children).forEach((ch,i)=>{ch.style.background=i===activeIndex?'#1976d2':'white'; ch.style.color=i===activeIndex?'white':'black';});}
+function createList(input,items){closeList(); if(!items.length)return; currentInput=input; activeIndex=0; const rect=input.getBoundingClientRect(); const div=doc.createElement('div'); div.style.position='fixed'; div.style.left=rect.left+'px'; div.style.top=(rect.bottom+2)+'px'; div.style.width=rect.width+'px'; div.style.maxHeight='220px'; div.style.overflowY='auto'; div.style.background='white'; div.style.border='1px solid #ccc'; div.style.borderRadius='6px'; div.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)'; div.style.zIndex='9999999999'; items.forEach((txt,i)=>{const item=doc.createElement('div'); item.textContent=txt; item.style.padding='12px'; item.style.cursor='pointer'; item.style.background=i===0?'#1976d2':'white'; item.style.color=i===0?'white':'black'; item.style.fontWeight='bold'; item.style.borderBottom='1px solid #eee'; item.addEventListener('mousedown',(e)=>{e.preventDefault(); e.stopPropagation(); setNativeValue(input,txt); closeList(); moveToNext(input);}); div.appendChild(item);}); doc.body.appendChild(div); activeList=div;}
+doc.addEventListener('input',function(e){const input=e.target; if(!input||input.tagName!=='INPUT')return; if(isSearchField(input)) return; const type=getFieldType(input); if(type!=='AGENT'&&type!=='HOTEL'&&type!=='AIRLINE'&&type!=='TRANSPORT') return; const val=input.value.trim().toUpperCase(); if(val.length<1||val==="0"){closeList(); return;} let list=type==='AGENT'?AGENTS:type==='HOTEL'?HOTELS:type==='AIRLINE'?AIRLINES:TRANSPORT; if(!list||!list.length) return; let filtered=list.filter(x=>x.toUpperCase().startsWith(val)).slice(0,8); if(filtered.length)createList(input,filtered); else closeList();});
+doc.addEventListener('keydown',function(e){const active=doc.activeElement; if(!active||(active.tagName!=='INPUT'&&active.tagName!=='TEXTAREA')) return; if(isSearchField(active)) return; if(isCalendarOpen()){if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter','Escape'].includes(e.key)) return;} const type=getFieldType(active); const isAgentOrHotel=(type==='AGENT'||type==='HOTEL'); if(type==='PASSENGERS'){if(e.key==='Enter'){e.preventDefault(); e.stopPropagation(); insertNewLinePassengers(active); return;} if(e.key==='ArrowDown'||e.key==='ArrowRight'){e.preventDefault(); e.stopPropagation(); closeList(); const next=findNearest(active,e.key==='ArrowDown'?'down':'right'); if(next){next.focus(); try{next.select();}catch(e){}} else {moveToNext(active);} return;} if(e.key==='ArrowUp'||e.key==='ArrowLeft'){e.preventDefault(); e.stopPropagation(); closeList(); const prev=findNearest(active,e.key==='ArrowUp'?'up':'left'); if(prev){prev.focus();} else {moveToPrev(active);} return;} if(e.key==='Escape'){closeList(); return;} return;} if(isAgentOrHotel&&activeList&&currentInput===active){if(e.key==='Enter'){e.preventDefault(); e.stopPropagation(); const chosen=activeList.children[activeIndex]?.textContent||activeList.children[0]?.textContent; if(chosen){setNativeValue(active,chosen);} closeList(); setTimeout(()=>{moveToNext(active);},100); return;} if(e.key==='ArrowDown'){if(activeList){e.preventDefault(); if(activeIndex<activeList.children.length-1){activeIndex++; highlightActive();} return;}} if(e.key==='ArrowUp'){if(activeList){e.preventDefault(); if(activeIndex>0){activeIndex--; highlightActive();} return;}} if(e.key==='Escape'){closeList(); return;}} if(e.key==='Enter'){e.preventDefault(); closeList(); moveToNext(active); return;} if(e.key==='ArrowRight'){e.preventDefault(); closeList(); const t=findNearest(active,'right'); if(t){t.focus(); try{t.select();}catch(e){}} else {moveToNext(active);} return;} if(e.key==='ArrowLeft'){e.preventDefault(); closeList(); const t=findNearest(active,'left'); if(t){t.focus(); try{t.select();}catch(e){}} else {moveToPrev(active);} return;} if(e.key==='ArrowDown'){e.preventDefault(); closeList(); const t=findNearest(active,'down'); if(t){t.focus(); try{t.select();}catch(e){}} else {moveToNext(active);} return;} if(e.key==='ArrowUp'){e.preventDefault(); closeList(); const t=findNearest(active,'up'); if(t){t.focus(); try{t.select();}catch(e){}} else {moveToPrev(active);} return;}},true);
+doc.addEventListener('click',(e)=>{if(activeList&&!activeList.contains(e.target)&&e.target!==currentInput)closeList();});
 </script>
 """
 js_code = js_template.replace("__AGENTS__", json.dumps(agents_for_js)).replace("__HOTELS__", json.dumps(hotels_for_js)).replace("__AIRLINES__", json.dumps(airlines_for_js)).replace("__TRANSPORT__", json.dumps(transport_for_js))
@@ -699,209 +548,99 @@ def edit_dialog(row):
         air_full, air_ok = ("", True) if is_no_flight else smart_match(e_air, airlines_for_js, airlines_upper)
         trans_full, trans_ok = ("", True) if is_no_trans else smart_match(e_trans_co, transport_for_js, transport_upper)
         if not comp_ok or not hotel_ok or not air_ok or not trans_ok:
-            st.error("Agent/Hotel/Airline/Transport not found!")
-            return
+            st.error("Agent/Hotel/Airline/Transport not found!"); return
         conn = sqlite3.connect(DB)
         conn.execute("UPDATE bookings SET sale_date=?, company=?, passengers=?, room_type=?, room_count=?, hotel=?, entry_date=?, exit_date=?, sell=?, airline=?, emp=?, flight_dep_time=?, flight_ret_time=?, transport_company=?, flight_no_dep=?, flight_no_ret=? WHERE id=?",
                      (e_sale, comp_full, e_pas, e_room, int(e_rc), hotel_full, e_entry, e_exit, to_f(e_sell), air_full, e_emp, e_dep, e_ret, trans_full, e_fno_dep, e_fno_ret, row[0]))
-        conn.commit()
-        conn.close()
-        st.session_state.table_version += 1
-        st.rerun()
+        conn.commit(); conn.close()
+        with st.spinner("جاري التحديث في Google Sheet..."):
+            sync_booking_to_sheet(row[0])
+        st.session_state.table_version += 1; st.rerun()
 
 @st.dialog("Invoice - معاينة الفاتورة", width="large")
 def invoice_dialog(row):
-    conn=sqlite3.connect(DB)
-    full=conn.execute("SELECT * FROM bookings WHERE id=?", (int(row[0]),)).fetchone()
-    conn.close()
-    if not full:
-        return
+    conn=sqlite3.connect(DB); full=conn.execute("SELECT * FROM bookings WHERE id=?", (int(row[0]),)).fetchone(); conn.close()
+    if not full: return
     booking_num = full[15] if full[15] and str(full[15]).strip()!="" else f"BOOK-{full[0]}"
     rc = full[25] if len(full)>25 and full[25] else 1
-    data={
-        "company":full[4],
-        "passengers":full[5],
-        "hotel":full[6],
-        "entry_date":full[2],
-        "exit_date":full[3],
-        "sell":full[12],
-        "voucher":booking_num,
-        "room_type":full[21] if len(full)>21 and full[21] else "",
-        "room_count":rc,
-        "id":full[0]
-    }
+    data={"company":full[4],"passengers":full[5],"hotel":full[6],"entry_date":full[2],"exit_date":full[3],"sell":full[12],"voucher":booking_num,"room_type":full[21] if len(full)>21 and full[21] else "","room_count":rc,"id":full[0]}
     filename=f"{booking_num}_{sanitize_filename(data['passengers'])}.pdf"
     full_path=Path.home() / "Desktop" / "invoice" / filename
     pdf_bytes=generate_invoice_pdf(data, save_path=str(full_path))
     logo_b64 = get_logo_b64()
     logo_html = f"<img src='data:image/png;base64,{logo_b64}' style='width:110px;height:110px;object-fit:contain;background:white;border-radius:4px;padding:4px;margin-right:20px;'>" if logo_b64 else ""
     passengers_html = "".join([f"<div style='padding:4px 0'>- {p.strip()}</div>" for p in str(data['passengers']).split('\n') if p.strip()])
-    html_preview = f"""
-    <div style="background:white; border:1px solid #ddd; border-radius:12px; padding:20px; font-family:Arial; color:#222;">
-        <div style="background:#0F2D5C; color:white; padding:12px 20px; border-radius:8px; margin:-20px -20px 20px -20px; display:flex; align-items:center; border-bottom:6px solid #FF8C00; height:135px;">
-            {logo_html}
-            <div>
-                <div style="font-size:28px; font-weight:bold;">HOTRIGO - INVOICE</div>
-                <div style="font-size:13px; margin-top:6px;">Invoice No: {booking_num} | Date: {datetime.now().strftime('%Y-%m-%d')}</div>
-            </div>
-        </div>
-        <div style="font-size:14px; line-height:28px;">
-            <b>Agent:</b> {data['company']}<br>
-            <b>Invoice No:</b> {booking_num}<br>
-            <b>Hotel:</b> {data['hotel']}<br>
-            <b>Check-in:</b> {data['entry_date']} &nbsp; | &nbsp; <b>Check-out:</b> {data['exit_date']}<br>
-            <b>Room Type:</b> {data['room_type']} &nbsp; | &nbsp; <b>Rooms:</b> {data['room_count']}
-        </div>
-        <div style="background:#f8f9fa; padding:12px 18px; border-radius:8px; font-size:14px; margin-top:12px; border-left:4px solid #FF8C00;">
-            <b>Passengers:</b><br>{passengers_html}
-        </div>
-        <div style="background:#f0f2f5; padding:18px; border-radius:10px; margin-top:22px; text-align:center; border:2px solid #0F2D5C;">
-            <div style="font-size:26px; font-weight:bold; color:#0F2D5C;">Selling Price: ${float(data['sell']):,.2f}</div>
-        </div>
-    </div>
-    """
+    html_preview = f"""<div style="background:white; border:1px solid #ddd; border-radius:12px; padding:20px; font-family:Arial; color:#222;"><div style="background:#0F2D5C; color:white; padding:12px 20px; border-radius:8px; margin:-20px -20px 20px -20px; display:flex; align-items:center; border-bottom:6px solid #FF8C00; height:135px;">{logo_html}<div><div style="font-size:28px; font-weight:bold;">HOTRIGO - INVOICE</div><div style="font-size:13px; margin-top:6px;">Invoice No: {booking_num} | Date: {datetime.now().strftime('%Y-%m-%d')}</div></div></div><div style="font-size:14px; line-height:28px;"><b>Agent:</b> {data['company']}<br><b>Invoice No:</b> {booking_num}<br><b>Hotel:</b> {data['hotel']}<br><b>Check-in:</b> {data['entry_date']} | <b>Check-out:</b> {data['exit_date']}<br><b>Room Type:</b> {data['room_type']} | <b>Rooms:</b> {data['room_count']}</div><div style="background:#f8f9fa; padding:12px 18px; border-radius:8px; font-size:14px; margin-top:12px; border-left:4px solid #FF8C00;"><b>Passengers:</b><br>{passengers_html}</div><div style="background:#f0f2f5; padding:18px; border-radius:10px; margin-top:22px; text-align:center; border:2px solid #0F2D5C;"><div style="font-size:26px; font-weight:bold; color:#0F2D5C;">Selling Price: ${float(data['sell']):,.2f}</div></div></div>"""
     st.markdown(f"### معاينة الفاتورة - {booking_num}")
     components.html(html_preview, height=560, scrolling=True)
-    st.download_button("⬇️ تحميل / طباعة PDF", data=pdf_bytes, file_name=filename, mime="application/pdf", use_container_width=True, type="primary")
+    st.download_button("⬇️ تحميل PDF", data=pdf_bytes, file_name=filename, mime="application/pdf", use_container_width=True, type="primary")
 
 @st.dialog("Booking Voucher - معاينة الفاوتشر", width="large")
 def voucher_dialog(row):
-    conn=sqlite3.connect(DB)
-    full=conn.execute("SELECT * FROM bookings WHERE id=?", (int(row[0]),)).fetchone()
-    conn.close()
-    if not full:
-        return
+    conn=sqlite3.connect(DB); full=conn.execute("SELECT * FROM bookings WHERE id=?", (int(row[0]),)).fetchone(); conn.close()
+    if not full: return
     rc = full[25] if len(full)>25 and full[25] else 1
     booking_no = full[15] if full[15] and str(full[15]).strip()!="" else f"HTG-{full[0]:06d}"
-    data={
-        "sale_date":full[1],
-        "booking_no":booking_no,
-        "passengers":full[5],
-        "hotel":full[6],
-        "room_type":full[21] if len(full)>21 and full[21] else "",
-        "room_count":rc,
-        "entry_date":full[2],
-        "exit_date":full[3],
-        "nights":full[7],
-        "notes":full[16] if len(full)>16 and full[16] else "",
-        "sell":full[12]
-    }
+    data={"sale_date":full[1],"booking_no":booking_no,"passengers":full[5],"hotel":full[6],"room_type":full[21] if len(full)>21 and full[21] else "","room_count":rc,"entry_date":full[2],"exit_date":full[3],"nights":full[7],"notes":full[16] if len(full)>16 and full[16] else "","sell":full[12]}
     filename=f"VOUCHER_{booking_no}_{sanitize_filename(data['passengers'])}.pdf"
     full_path=Path.home() / "Desktop" / "voucher" / filename
     pdf_bytes=generate_voucher_pdf(data, save_path=str(full_path))
     logo_b64 = get_logo_b64()
     logo_html = f"<img src='data:image/png;base64,{logo_b64}' style='width:110px;height:110px;object-fit:contain;background:white;border-radius:4px;padding:4px;margin-right:20px;'>" if logo_b64 else ""
     passengers_html = "".join([f"<div style='padding:5px 0; font-size:15px;'>- {p.strip()}</div>" for p in str(data['passengers']).split('\n') if p.strip()])
-    notes_html = f"<div style='margin-top:14px; background:#fffbe6; border-left:4px solid #FF8C00; padding:12px 16px; border-radius:6px; font-size:14px;'><b>Note:</b><br>{data['notes'].replace(chr(10), '<br>') if data['notes'] else 'No notes'}</div>" if data['notes'] else "<div style='margin-top:14px; background:#f8f9fa; padding:10px 16px; border-radius:6px; font-size:13px; color:#888;'>No notes</div>"
+    notes_html = f"<div style='margin-top:14px; background:#fffbe6; border-left:4px solid #FF8C00; padding:12px 16px; border-radius:6px; font-size:14px;'><b>Note:</b><br>{data['notes'].replace(chr(10), '<br>') if data['notes'] else 'No notes'}</div>" if data['notes'] else ""
     html_preview = f"""
     <div style="background:white; border:1px solid #ddd; border-radius:12px; padding:20px; font-family:Arial; color:#222;">
         <div style="background:#0F2D5C; color:white; padding:12px 20px; border-radius:8px; margin:-20px -20px 20px -20px; display:flex; align-items:center; border-bottom:6px solid #FF8C00; height:135px;">
-            {logo_html}
-            <div>
-                <div style="font-size:26px; font-weight:bold;">HOTRIGO - BOOKING VOUCHER</div>
-                <div style="font-size:13px; margin-top:6px;">Booking No: {booking_no} | Date: {data['sale_date']} | tourism2020-hotrigo</div>
-            </div>
+            {logo_html}<div><div style="font-size:26px; font-weight:bold;">HOTRIGO - BOOKING VOUCHER</div><div style="font-size:13px; margin-top:6px;">Booking No: {booking_no} | Date: {data['sale_date']}</div></div>
         </div>
-        <div style="background:#f8f9fa; padding:14px 18px; border-radius:8px; margin-bottom:14px; line-height:26px; font-size:14px;">
-            <b>Booking No:</b> {booking_no}<br>
-            <b>Hotel:</b> {data['hotel']} &nbsp; | &nbsp; <b>Room Type:</b> {data['room_type']} &nbsp; | &nbsp; <b>Rooms:</b> {data['room_count']}<br>
-            <b>Check-in:</b> {data['entry_date']} &nbsp; | &nbsp; <b>Check-out:</b> {data['exit_date']} &nbsp; | &nbsp; <b>Nights:</b> {data['nights']}
-        </div>
+        <div style="background:#f8f9fa; padding:14px 18px; border-radius:8px; margin-bottom:14px; line-height:26px; font-size:14px;"><b>Booking No:</b> {booking_no}<br><b>Hotel:</b> {data['hotel']} | <b>Room Type:</b> {data['room_type']} | <b>Rooms:</b> {data['room_count']}<br><b>Check-in:</b> {data['entry_date']} | <b>Check-out:</b> {data['exit_date']} | <b>Nights:</b> {data['nights']}</div>
         <div style="font-weight:bold; margin:12px 0 6px 0; font-size:15px;">Guest Names:</div>
-        <div style="background:#fff; border:1px solid #eee; border-left:4px solid #0F2D5C; padding:12px 18px; border-radius:6px;">
-            {passengers_html}
-        </div>
-        {notes_html}
+        <div style="background:#fff; border:1px solid #eee; border-left:4px solid #0F2D5C; padding:12px 18px; border-radius:6px;">{passengers_html}</div>{notes_html}
     </div>
     """
     st.markdown(f"### 🧾 معاينة الفاوتشر - {booking_no} - {rc} Rooms")
     components.html(html_preview, height=700, scrolling=True)
     st.download_button("⬇️ تحميل / طباعة Voucher PDF", data=pdf_bytes, file_name=filename, mime="application/pdf", use_container_width=True, type="primary")
+    conn=sqlite3.connect(DB); full=conn.execute("SELECT * FROM bookings WHERE id=?", (int(row[0]),)).fetchone(); conn.close()
+    if not full: return
+    rc = full[25] if len(full)>25 and full[25] else 1
+    booking_no = full[15] if full[15] and str(full[15]).strip()!="" else f"HTG-{full[0]:06d}"
+    data={"sale_date":full[1],"booking_no":booking_no,"passengers":full[5],"hotel":full[6],"room_type":full[21] if len(full)>21 and full[21] else "","room_count":rc,"entry_date":full[2],"exit_date":full[3],"nights":full[7],"notes":full[16] if len(full)>16 and full[16] else "","sell":full[12]}
+    filename=f"VOUCHER_{booking_no}_{sanitize_filename(data['passengers'])}.pdf"
+    full_path=Path.home() / "Desktop" / "voucher" / filename
+    pdf_bytes=generate_voucher_pdf(data, save_path=str(full_path))
+    st.download_button("⬇️ تحميل Voucher", data=pdf_bytes, file_name=filename, mime="application/pdf", use_container_width=True, type="primary")
 
-@st.dialog("Agent Statement - كشف الوكيل", width="large")
+@st.dialog("Agent Statement", width="large")
 def agent_statement_dialog(agent_name):
     conn=sqlite3.connect(DB)
     bookings = pd.read_sql("SELECT * FROM bookings WHERE company=? ORDER BY entry_date", conn, params=(agent_name,))
     payments = pd.read_sql("SELECT * FROM agent_payments WHERE agent=? ORDER BY pay_date DESC", conn, params=(agent_name,))
     conn.close()
     if bookings.empty:
-        st.warning(f"لا يوجد حجوزات للوكيل {agent_name}")
-        return
+        st.warning(f"لا يوجد حجوزات للوكيل {agent_name}"); return
+    
     pdf_bytes, total_sales, total_payments, balance = generate_agent_statement_pdf(agent_name, bookings, payments)
     excel_bytes, _, _, _ = generate_agent_statement_excel(agent_name, bookings, payments)
     filename_pdf = f"STATEMENT_{agent_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
-    filename_excel = f"STATEMENT_{agent_name}_{datetime.now().strftime('%Y%m%d')}.xlsx"
     full_path_pdf = Path.home() / "Desktop" / "statements" / filename_pdf
     os.makedirs(os.path.dirname(full_path_pdf), exist_ok=True)
-    with open(full_path_pdf, "wb") as f:
-        f.write(pdf_bytes)
-    st.markdown(f"### كشف حساب: {agent_name} - {len(bookings)} حجز - Landscape - اللوغو كبير")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.download_button("📄 تحميل / طباعة كشف PDF بالعرض", data=pdf_bytes, file_name=filename_pdf, mime="application/pdf", use_container_width=True, type="primary", key="dl_pdf")
-    with col2:
-        st.download_button("📊 تصدير اكسل - كشف الوكيل كامل", data=excel_bytes, file_name=filename_excel, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="dl_excel")
-    st.caption(f"تم الحفظ: {full_path_pdf} | مبيعات: ${total_sales:,.2f} - دفعات: ${total_payments:,.2f} - رصيد: ${balance:,.2f}")
-    logo_b64 = get_logo_b64()
-    logo_html = f"<img src='data:image/png;base64,{logo_b64}' style='width:80px;height:75px;object-fit:contain;background:white;border-radius:4px;padding:3px;margin-right:15px;'>" if logo_b64 else ""
-    bookings_rows = ""
-    for _, row in bookings.iterrows():
-        pas = str(row['passengers']).split('\n')[0][:22]
-        rc = row['room_count'] if 'room_count' in bookings.columns and pd.notna(row['room_count']) else 1
-        rtype = row['room_type'] if 'room_type' in bookings.columns and row['room_type'] else ""
-        entry = row['entry_date']
-        exit_d = row['exit_date']
-        sell = f"${float(row['sell']):,.0f}" if row['sell'] else ""
-        note = str(row['notes'])[:30] if 'notes' in bookings.columns and row['notes'] else ""
-        bookings_rows += f"<tr style='border-bottom:1px solid #eee;'><td style='padding:14px 6px 8px 6px;'>{pas}</td><td style='padding:14px 6px 8px 6px; text-align:center;'>{rc}</td><td style='padding:14px 6px 8px 6px;'>{rtype}</td><td style='padding:14px 6px 8px 6px;'>{entry}</td><td style='padding:14px 6px 8px 6px;'>{exit_d}</td><td style='padding:14px 6px 8px 6px; text-align:right; font-weight:bold;'>{sell}</td><td style='padding:14px 6px 8px 6px; font-size:10px;'>{note}</td></tr>"
-    payments_rows = ""
-    if not payments.empty:
-        for _, p in payments.iterrows():
-            pdate = str(p['pay_date'])[:10]
-            amt = f"${float(p['amount']):,.2f}"
-            pnote = str(p['note']) if p['note'] else ""
-            payments_rows += f"<tr style='border-bottom:1px solid #eee;'><td style='padding:12px 6px;'>{pdate}</td><td style='padding:12px 6px; font-weight:bold;'>{amt}</td><td style='padding:12px 6px;'>{pnote}</td></tr>"
-    else:
-        payments_rows = "<tr><td colspan='3' style='padding:12px; text-align:center; color:#888;'>لا يوجد دفعات</td></tr>"
-    html_preview = f"""
-    <div style="background:white; border:1px solid #ddd; border-radius:12px; padding:18px; font-family:Arial; color:#222; width:100%;">
-        <div style="background:#0F2D5C; color:white; padding:10px 18px; border-radius:8px; margin:-18px -18px 14px -18px; display:flex; align-items:center; border-bottom:5px solid #FF8C00;">
-            {logo_html}
-            <div>
-                <div style="font-size:17px; font-weight:bold;">AGENT STATEMENT - {agent_name}</div>
-                <div style="font-size:11px;">Date: {datetime.now().strftime('%d/%m/%Y')} | {len(bookings)} حجز - اللوغو 80x75</div>
-            </div>
-        </div>
-        <div style="font-weight:bold; margin:8px 0; font-size:13px; color:#0F2D5C;">الحجوزات</div>
-        <table style="width:100%; border-collapse:collapse; font-size:11px; table-layout:fixed;">
-            <thead><tr style="background:#f0f0f0;">
-                <th style="padding:8px; border-bottom:2px solid #0F2D5C; text-align:left; width:22%;">المسافر</th>
-                <th style="padding:8px; border-bottom:2px solid #0F2D5C; width:7%;">عدد الغرف</th>
-                <th style="padding:8px; border-bottom:2px solid #0F2D5C; width:8%;">نوع الغرف</th>
-                <th style="padding:8px; border-bottom:2px solid #0F2D5C; width:12%;">الدخول</th>
-                <th style="padding:8px; border-bottom:2px solid #0F2D5C; width:12%;">الخروج</th>
-                <th style="padding:8px; border-bottom:2px solid #0F2D5C; width:10%;">المبيع</th>
-                <th style="padding:8px; border-bottom:2px solid #0F2D5C; width:29%;">ملاحظة</th>
-            </tr></thead><tbody>{bookings_rows}</tbody>
-        </table>
-        <div style="font-weight:bold; margin:18px 0 8px 0; font-size:13px; color:#0F2D5C;">الدفعات</div>
-        <table style="width:100%; border-collapse:collapse; font-size:11px;">
-            <thead><tr style="background:#e8f5e9;">
-                <th style="padding:10px 6px; border-bottom:2px solid #2e7d32; text-align:left;">تاريخ الدفعة</th>
-                <th style="padding:10px 6px; border-bottom:2px solid #2e7d32;">قيمة الدفعة</th>
-                <th style="padding:10px 6px; border-bottom:2px solid #2e7d32; text-align:left;">ملاحظة الدفعة</th>
-            </tr></thead><tbody>{payments_rows}</tbody>
-        </table>
-        <div style="margin-top:16px; background:#f8f9fa; padding:12px; border-radius:8px; display:flex; justify-content:space-between; font-weight:bold; font-size:13px;">
-            <span>اجمالي الحجوزات: ${total_sales:,.2f}</span>
-            <span>اجمالي الدفعات: ${total_payments:,.2f}</span>
-            <span style="color:{'red' if balance>0 else 'green'};">الرصيد: ${balance:,.2f}</span>
-        </div>
-    </div>
-    """
-    components.html(html_preview, height=900, scrolling=True)
+    with open(full_path_pdf, "wb") as f: f.write(pdf_bytes)
+    upload_drive(str(full_path_pdf))
 
-st.markdown("## ✈️ hotrigo | tourism2020-hotrigo")
+    # العنوان
+    st.markdown(f"### كشف حساب: {agent_name} - المبيعات ${total_sales:,.2f} - المدفوع ${total_payments:,.2f} - الباقي ${balance:,.2f}")
+    
+    # الزر الأحمر فوق
+    st.download_button("📄 تحميل PDF", data=pdf_bytes, file_name=filename_pdf, mime="application/pdf", use_container_width=True, type="primary")
+
+    # المعاينة تحت
+    import base64
+    b64 = base64.b64encode(pdf_bytes).decode()
+    st.markdown(f'<iframe src="data:application/pdf;base64,{b64}#toolbar=0" width="100%" height="700px" style="border:none;"></iframe>', unsafe_allow_html=True)
+
+st.markdown("## ✈️ hotrigo | Sheets Sync ✅")
 t1,t2,t3=st.tabs(["Sales", "Account Statement", "Agents & Hotels"])
 with t1:
     l,r=st.columns([1, 4.8])
@@ -910,300 +649,198 @@ with t1:
         emp=st.text_input("Sales Employee *", key="emp")
         comp=st.text_input("Agent *", key="comp", placeholder="")
         pas=st.text_area("Passengers *", height=90, key="pas", placeholder="One name per line")
+        pax_count=st.text_input("Number of Persons", value="1", key="pax_count", placeholder="e.g. 2")
         room_type=st.text_input("Room Type *", key="room_type", placeholder="SNG - DBL - TRP")
-        room_count=st.number_input("Number of Rooms", min_value=1, max_value=20, value=1, step=1, key="room_count")
+        room_count=st.text_input("Number of Rooms", value="", key="room_count", placeholder="e.g. 1 or leave empty for 0")
         hotel=st.text_input("Hotel *", key="hotel", placeholder="")
         ed=st.date_input("Check-in Date", datetime.now()+timedelta(days=1), key="ed")
-        nights=st.number_input("Nights", 1, 30, 5, key="nights")
-        xd=ed+timedelta(days=nights)
+        nights=st.text_input("Nights", value="", key="nights", placeholder="e.g. 5 or leave empty for 0")
+        try: nights_val=int(nights) if nights.strip()!="" else 0
+        except: nights_val=0
+        xd=ed+timedelta(days=nights_val)
         st.caption(f"Check-out: {xd}")
         pn_s=st.text_input("Price per Night $", key="pn")
         fl_s=st.text_input("Flight $", key="fl")
         tr_s=st.text_input("Transport $", key="tr")
         sell_s=st.text_input("Selling Price $ *", key="sell")
-        pn=to_f(pn_s)
-        fl=to_f(fl_s)
-        tr=to_f(tr_s)
-        sell=to_f(sell_s)
-        price_per_night_rooms = pn * room_count
-        ht_tot_preview = nights * price_per_night_rooms
-        total_cost_preview = ht_tot_preview + fl + tr
-        if pn_s or fl_s or tr_s:
-            st.info(f"💰 Hotel: ${pn:.2f} x {room_count} Rooms = ${price_per_night_rooms:.2f}/Night | {nights} Nights = ${ht_tot_preview:.2f} | ✈️ Flight: ${fl:.2f} | 🚌 Transfer: ${tr:.2f} | 💵 Total Cost: ${total_cost_preview:.2f}")
+        pn=to_f(pn_s); fl=to_f(fl_s); tr=to_f(tr_s); sell=to_f(sell_s)
+        try: pax_count_val=int(pax_count)
+        except: pax_count_val=1
+        try: room_count_val=int(room_count) if room_count.strip()!="" else 0
+        except: room_count_val=0
+        rc_for_calc = room_count_val if room_count_val > 0 else 1
+        cost_total = (pn * nights_val * rc_for_calc) + fl + tr
+        if cost_total > 0:
+            st.caption(f"💰 الكوست صار علينا: ${cost_total:,.2f}")
         c_dep, c_ret=st.columns(2)
-        with c_dep:
-            dep_time=st.text_input("Departure Time", key="dep_time", placeholder="10:30")
-        with c_ret:
-            ret_time=st.text_input("Return Time", key="ret_time", placeholder="18:45")
+        with c_dep: dep_time=st.text_input("Departure Time", key="dep_time", placeholder="10:30")
+        with c_ret: ret_time=st.text_input("Return Time", key="ret_time", placeholder="18:45")
         c_fno_dep, c_fno_ret = st.columns(2)
-        with c_fno_dep:
-            flight_no_dep=st.text_input("Flight No Dep", key="flight_no_dep", placeholder="TK2026")
-        with c_fno_ret:
-            flight_no_ret=st.text_input("Flight No Ret", key="flight_no_ret", placeholder="TK2027")
+        with c_fno_dep: flight_no_dep=st.text_input("Flight No Dep", key="flight_no_dep", placeholder="TK2026")
+        with c_fno_ret: flight_no_ret=st.text_input("Flight No Ret", key="flight_no_ret", placeholder="TK2027")
         airline=st.text_input("Airline (empty=no flight)", key="airline", placeholder="")
         transport_co=st.text_input("Transport Company (empty=no transfer)", key="transport_co", placeholder="")
         notes=st.text_input("Note", key="notes")
         vno=st.text_input("Voucher No", key="vno")
         if st.button("SAVE SALE", type="primary", use_container_width=True):
-            airline_val = airline.strip()
-            transport_val = transport_co.strip()
+            airline_val = airline.strip(); transport_val = transport_co.strip()
             comp_full, comp_ok = smart_match(comp, agents_for_js, agents_upper)
             hotel_full, hotel_ok = smart_match(hotel, hotels_for_js, hotels_upper)
             is_no_flight = airline_val == "" or airline_val == "0"
             is_no_transport = transport_val == "" or transport_val == "0"
             airline_full, airline_ok = ("", True) if is_no_flight else smart_match(airline_val, airlines_for_js, airlines_upper)
             transport_full, transport_ok = ("", True) if is_no_transport else smart_match(transport_val, transport_for_js, transport_upper)
-            if not comp.strip() or not hotel.strip() or not emp.strip() or not pas.strip():
-                st.error("Fill required")
-            elif not comp_ok:
-                st.error(f"❌ Agent '{comp}' not found!")
-            elif not hotel_ok:
-                st.error(f"❌ Hotel '{hotel}' not found!")
-            elif not airline_ok:
-                st.error(f"❌ Airline '{airline}' not found!")
-            elif not transport_ok:
-                st.error(f"❌ Transport '{transport_co}' not found!")
+            if not comp.strip() or not hotel.strip() or not emp.strip() or not pas.strip(): st.error("Fill required")
+            elif not comp_ok: st.error(f"❌ Agent '{comp}' not found!")
+            elif not hotel_ok: st.error(f"❌ Hotel '{hotel}' not found!")
+            elif not airline_ok: st.error(f"❌ Airline '{airline}' not found!")
+            elif not transport_ok: st.error(f"❌ Transport '{transport_co}' not found!")
             else:
-                ht_tot=nights*pn*room_count
-                cost=ht_tot+fl+tr
-                profit=sell-cost
+                ht_tot=pn*nights_val*rc_for_calc; cost=ht_tot+fl+tr; profit=sell-cost
                 st.session_state.pending={"sale_date":str(sd),"entry_date":str(ed),"exit_date":str(xd),"company":comp_full,"passengers":pas.strip(),"hotel":hotel_full,"room_type":room_type.strip(),"room_count":int(room_count),"nights":int(nights),"price_night":float(pn),"hotel_total":float(ht_tot),"flight":float(fl),"transport":float(tr),"sell":float(sell),"cost":float(cost),"profit":float(profit),"voucher":vno,"notes":notes,"airline":airline_full,"emp":emp.strip(),"dep":dep_time.strip(),"ret":ret_time.strip(),"transport_company":transport_full,"fno_dep":flight_no_dep.strip(),"fno_ret":flight_no_ret.strip()}
         if st.session_state.pending:
             d=st.session_state.pending
-            st.warning(f"✅ {d['company']} - {d['passengers'].split(chr(10))[0]} | {d['room_count']} Rooms\n💰 Hotel ${d['price_night']:.2f} x {d['room_count']} = ${d['price_night']*d['room_count']:.2f}/Night ({d['nights']} Nights = ${d['hotel_total']:.2f}) | ✈️ Flight: ${d['flight']:.2f} | 🚌 Transfer: ${d['transport']:.2f} | 💵 Total: ${d['cost']:.2f} | Sell: ${d['sell']:.2f}")
+            st.warning(f"✅ {d['company']} - {d['passengers'].split(chr(10))[0]} | {d['room_count']} Rooms | Sell ${d['sell']:.2f}")
             c1,c2=st.columns(2)
             with c1:
                 if st.button("YES", type="primary", use_container_width=True):
                     conn=sqlite3.connect(DB, check_same_thread=False)
-                    conn.execute("INSERT INTO bookings (sale_date,entry_date,exit_date,company,passengers,hotel,nights,price_night,hotel_total,flight,transport,sell,cost,profit,voucher,notes,airline,emp,flight_dep_time,flight_ret_time,room_type,transport_company,flight_no_dep,flight_no_ret,room_count) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    cur=conn.cursor()
+                    cur.execute("INSERT INTO bookings (sale_date,entry_date,exit_date,company,passengers,hotel,nights,price_night,hotel_total,flight,transport,sell,cost,profit,voucher,notes,airline,emp,flight_dep_time,flight_ret_time,room_type,transport_company,flight_no_dep,flight_no_ret,room_count) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (d["sale_date"],d["entry_date"],d["exit_date"],d["company"],d["passengers"],d["hotel"],d["nights"],d["price_night"],d["hotel_total"],d["flight"],d["transport"],d["sell"],d["cost"],d["profit"],d["voucher"],d["notes"],d["airline"],d["emp"],d["dep"],d["ret"],d["room_type"],d["transport_company"],d["fno_dep"],d["fno_ret"],d["room_count"]))
-                    conn.commit()
-                    conn.close()
-                    st.session_state.do_clear=True
-                    st.session_state.pending=None
-                    st.rerun()
+                    new_id = cur.lastrowid
+                    conn.commit(); conn.close()
+                    with st.spinner(f"جاري الرفع للـ Google Sheet - ID {new_id}..."):
+                        ok = sync_booking_to_sheet(new_id)
+                        if ok: st.success(f"✅ تم الرفع للـ Sheet - ID {new_id}")
+                        else: st.warning("تم الحفظ محلياً - فشل الرفع للشيت")
+                    st.session_state.do_clear=True; st.session_state.pending=None; st.rerun()
             with c2:
-                if st.button("NO", use_container_width=True):
-                    st.session_state.pending=None
-                    st.rerun()
+                if st.button("NO", use_container_width=True): st.session_state.pending=None; st.rerun()
     with r:
         col_f1, col_f2, col_f3=st.columns([1.2, 1.2, 1.3])
-        with col_f1:
-            entry_date_val=st.date_input("entry_date_filter", value=None, key="entry_date_filter", label_visibility="collapsed")
-        with col_f2:
-            exit_date_val=st.date_input("exit_date_filter", value=None, key="exit_date_filter", label_visibility="collapsed")
+        with col_f1: entry_date_val=st.date_input("entry_date_filter", value=None, key="entry_date_filter", label_visibility="collapsed")
+        with col_f2: exit_date_val=st.date_input("exit_date_filter", value=None, key="exit_date_filter", label_visibility="collapsed")
         with col_f3:
-            st.button("Show All", use_container_width=True, on_click=clear_filters)
+            c_a,c_b=st.columns(2)
+            with c_a: st.button("Show All", use_container_width=True, on_click=clear_filters)
+            with c_b:
+                if st.button("🔄 Sync All to Sheet", use_container_width=True):
+                    with st.spinner("جاري مزامنة كل الحجوزات..."):
+                        sync_all_to_sheet()
+                        st.success("تمت المزامنة!")
         b_filter, b_btns = st.columns([1.0, 4.0])
-        with b_filter:
-            search_mode = st.selectbox("نوع البحث", ["الكل", "مسافر فقط", "وكيل فقط", "رقم حجز"], key="search_mode")
+        with b_filter: search_mode = st.selectbox("نوع البحث", ["الكل", "مسافر فقط", "وكيل فقط", "رقم حجز"], key="search_mode")
         with b_btns:
             b1, b2, b3, b4, scol=st.columns([0.5, 0.6, 0.6, 1.0, 1.5])
-            with b1:
-                edit_btn=st.button("Edit", use_container_width=True, key="edit_small")
-            with b2:
-                inv_btn=st.button("Invoice", use_container_width=True, key="inv_btn")
-            with b3:
-                voucher_btn=st.button("Voucher", use_container_width=True, key="voucher_btn")
-            with b4:
-                statement_btn=st.button("Agent Statement", use_container_width=True, key="statement_btn", type="primary")
-            with scol:
-                search_val=st.text_input("Search", placeholder="Search... Enter للبحث", label_visibility="collapsed", key="search")
+            with b1: edit_btn=st.button("Edit", use_container_width=True, key="edit_small")
+            with b2: inv_btn=st.button("Invoice", use_container_width=True, key="inv_btn")
+            with b3: voucher_btn=st.button("Voucher", use_container_width=True, key="voucher_btn")
+            with b4: statement_btn=st.button("Agent Statement", use_container_width=True, key="statement_btn", type="primary")
+            with scol: search_val=st.text_input("Search", placeholder="Search...", label_visibility="collapsed", key="search")
         conn=sqlite3.connect(DB)
-        base="SELECT * FROM bookings WHERE 1=1"
-        params=[]
-        if entry_date_val:
-            base+=f" AND entry_date =?"
-            params.append(str(entry_date_val))
-        if exit_date_val:
-            base+=f" AND exit_date =?"
-            params.append(str(exit_date_val))
+        base="SELECT * FROM bookings WHERE 1=1"; params=[]
+        if entry_date_val: base+=f" AND entry_date =?"; params.append(str(entry_date_val))
+        if exit_date_val: base+=f" AND exit_date =?"; params.append(str(exit_date_val))
         if search_val.strip():
-            s=search_val.strip().replace("'", "''")
-            mode = st.session_state.get("search_mode", "الكل")
+            s=search_val.strip().replace("'", "''"); mode = st.session_state.get("search_mode", "الكل")
             if mode == "رقم حجز":
-                if s.isdigit():
-                    base+=f" AND id =?"
-                    params.append(int(s))
-                else:
-                    base+=f" AND voucher LIKE? COLLATE NOCASE"
-                    params.append(f"%{s}%")
-            elif mode == "مسافر فقط":
-                base+=f" AND passengers LIKE? COLLATE NOCASE"
-                params.append(f"%{s}%")
-            elif mode == "وكيل فقط":
-                base+=f" AND company LIKE? COLLATE NOCASE"
-                params.append(f"%{s}%")
+                if s.isdigit(): base+=f" AND id =?"; params.append(int(s))
+                else: base+=f" AND voucher LIKE? COLLATE NOCASE"; params.append(f"%{s}%")
+            elif mode == "مسافر فقط": base+=f" AND passengers LIKE? COLLATE NOCASE"; params.append(f"%{s}%")
+            elif mode == "وكيل فقط": base+=f" AND company LIKE? COLLATE NOCASE"; params.append(f"%{s}%")
             else:
-                if s.isdigit():
-                    base+=f" AND (id =? OR voucher LIKE? COLLATE NOCASE OR passengers LIKE? COLLATE NOCASE OR company LIKE? COLLATE NOCASE)"
-                    params.extend([int(s), f"%{s}%", f"%{s}%", f"%{s}%"])
-                else:
-                    base+=f" AND (company LIKE? COLLATE NOCASE OR passengers LIKE? COLLATE NOCASE OR hotel LIKE? COLLATE NOCASE OR voucher LIKE? COLLATE NOCASE)"
-                    like = f"%{s}%"
-                    params.extend([like, like, like, like])
+                if s.isdigit(): base+=f" AND (id =? OR voucher LIKE? COLLATE NOCASE OR passengers LIKE? COLLATE NOCASE OR company LIKE? COLLATE NOCASE)"; params.extend([int(s), f"%{s}%", f"%{s}%", f"%{s}%"])
+                else: base+=f" AND (company LIKE? COLLATE NOCASE OR passengers LIKE? COLLATE NOCASE OR hotel LIKE? COLLATE NOCASE OR voucher LIKE? COLLATE NOCASE)"; like = f"%{s}%"; params.extend([like, like, like, like])
         base+=" ORDER BY id DESC"
-        df_raw=pd.read_sql(base, conn, params=params)
-        conn.close()
-        if df_raw.empty:
-            display_df=pd.DataFrame(columns=["ID","Sale Date","Agent","Passengers","Room Type","Rooms","Hotel","Check-in","Check-out","Sell Price","Airline","Dep Time","Ret Time","Note","Employee","Transport Co"])
+        df_raw=pd.read_sql(base, conn, params=params); conn.close()
+        if df_raw.empty: display_df=pd.DataFrame(columns=["ID","Sale Date","Agent","Passengers","Room Type","Rooms","Hotel","Check-in","Check-out","Sell Price","Airline","Dep Time","Ret Time","Note","Employee","Transport Co"])
         else:
             display_df=df_raw[["id","sale_date","company","passengers","room_type","room_count","hotel","entry_date","exit_date","sell","airline","flight_dep_time","flight_ret_time","notes","emp","transport_company"]].copy()
             display_df.columns=["ID","Sale Date","Agent","Passengers","Room Type","Rooms","Hotel","Check-in","Check-out","Sell Price","Airline","Dep Time","Ret Time","Note","Employee","Transport Co"]
         event = st.dataframe(display_df, use_container_width=True, height=650, hide_index=True, on_select="rerun", selection_mode="multi-row", key=f"main_table_{st.session_state.table_version}")
-        st.markdown(f"**Total bookings: {len(df_raw)} - وضع البحث: {st.session_state.search_mode}**")
+        st.markdown(f"**Total bookings: {len(df_raw)}**")
         selected_rows = event.selection.rows if event and hasattr(event, 'selection') else []
         selected_ids = []
         if selected_rows and not df_raw.empty:
             selected_ids = df_raw.iloc[selected_rows]["id"].tolist()
-            selected_agent = df_raw.iloc[selected_rows[0]]["company"] if selected_rows else ""
-            st.info(f"✅ محدد: سطر {selected_rows[0]+1} - ID {selected_ids[0]} - الوكيل {selected_agent}")
-        def get_selected_ids():
-            return selected_ids
+            st.info(f"✅ محدد: ID {selected_ids[0]}")
+        def get_selected_ids(): return selected_ids
         def get_selected_agent():
-            if selected_rows and not df_raw.empty:
-                return df_raw.iloc[selected_rows[0]]["company"]
+            if selected_rows and not df_raw.empty: return df_raw.iloc[selected_rows[0]]["company"]
             return None
         if edit_btn:
             ids=get_selected_ids()
-            if len(ids)!=1:
-                st.error("اكبس على سطر واحد وبعدين Edit")
+            if len(ids)!=1: st.error("اكبس على سطر واحد وبعدين Edit")
             else:
-                conn=sqlite3.connect(DB)
-                row=conn.execute("SELECT * FROM bookings WHERE id=?", (int(ids[0]),)).fetchone()
-                conn.close()
-                if row:
-                    edit_dialog(row)
+                conn=sqlite3.connect(DB); row=conn.execute("SELECT * FROM bookings WHERE id=?", (int(ids[0]),)).fetchone(); conn.close()
+                if row: edit_dialog(row)
         if inv_btn:
             ids=get_selected_ids()
-            if len(ids)!=1:
-                st.error("اكبس على سطر واحد وبعدين Invoice")
+            if len(ids)!=1: st.error("اكبس على سطر واحد وبعدين Invoice")
             else:
-                conn=sqlite3.connect(DB)
-                row=conn.execute("SELECT * FROM bookings WHERE id=?", (int(ids[0]),)).fetchone()
-                conn.close()
-                if row:
-                    invoice_dialog(row)
+                conn=sqlite3.connect(DB); row=conn.execute("SELECT * FROM bookings WHERE id=?", (int(ids[0]),)).fetchone(); conn.close()
+                if row: invoice_dialog(row)
         if voucher_btn:
             ids=get_selected_ids()
-            if len(ids)!=1:
-                st.error("اكبس على سطر واحد وبعدين Voucher")
+            if len(ids)!=1: st.error("اكبس على سطر واحد وبعدين Voucher")
             else:
-                conn=sqlite3.connect(DB)
-                row=conn.execute("SELECT * FROM bookings WHERE id=?", (int(ids[0]),)).fetchone()
-                conn.close()
-                if row:
-                    voucher_dialog(row)
+                conn=sqlite3.connect(DB); row=conn.execute("SELECT * FROM bookings WHERE id=?", (int(ids[0]),)).fetchone(); conn.close()
+                if row: voucher_dialog(row)
         if statement_btn:
             ag = get_selected_agent()
-            if not ag:
-                st.error("حدد سطر واحد للوكيل يلي بدك كشفو")
-            else:
-                agent_statement_dialog(ag)
-
+            if not ag: st.error("حدد سطر واحد للوكيل")
+            else: agent_statement_dialog(ag)
 with t2:
-    st.markdown("## 💰 كشف حساب الوكلاء - مدفوعات")
+    st.markdown("## 💰 كشف حساب الوكلاء")
     col_pay1, col_pay2 = st.columns([1,2])
     with col_pay1:
         st.markdown("#### اضافة دفعة جديدة")
-        conn=sqlite3.connect(DB)
-        agents_list=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]
-        conn.close()
+        conn=sqlite3.connect(DB); agents_list=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]; conn.close()
         pay_agent = st.selectbox("اختر الوكيل", agents_list, key="pay_agent")
         pay_date = st.date_input("تاريخ الدفعة", datetime.now(), key="pay_date")
         pay_amount = st.text_input("المبلغ $", key="pay_amount")
         pay_note = st.text_input("ملاحظة", key="pay_note", placeholder="تحويل بنكي - كاش...")
         if st.button("اضافة دفعة", type="primary", use_container_width=True):
             amt = to_f(pay_amount)
-            if not pay_agent or amt<=0:
-                st.error("اختر وكيل ومبلغ صحيح")
+            if not pay_agent or amt<=0: st.error("اختر وكيل ومبلغ صحيح")
             else:
-                conn=sqlite3.connect(DB)
-                conn.execute("INSERT INTO agent_payments (agent, pay_date, amount, note) VALUES (?,?,?,?)", (pay_agent, str(pay_date), amt, pay_note))
-                conn.commit()
-                conn.close()
-                st.success(f"تم اضافة ${amt} للوكيل {pay_agent}")
-                st.rerun()
+                conn=sqlite3.connect(DB); conn.execute("INSERT INTO agent_payments (agent, pay_date, amount, note) VALUES (?,?,?,?)", (pay_agent, str(pay_date), amt, pay_note)); conn.commit(); conn.close()
+                st.success(f"تم اضافة ${amt} للوكيل {pay_agent}"); st.rerun()
     with col_pay2:
         st.markdown("#### ملخص الأرصدة")
         conn=sqlite3.connect(DB)
-        bookings_all = pd.read_sql("SELECT * FROM bookings", conn)
         summary = pd.read_sql("SELECT b.company as Agent, SUM(b.sell) as Total_Sales, (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Total_Paid, SUM(b.sell) - (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Balance FROM bookings b GROUP BY b.company", conn)
         conn.close()
         st.dataframe(summary, use_container_width=True, hide_index=True)
-        if not bookings_all.empty and not summary.empty:
-            sel_agent = st.selectbox("اختر وكيل لتصدير كشفه اكسل", summary['Agent'].tolist(), key="excel_agent")
-            if sel_agent:
-                conn=sqlite3.connect(DB)
-                b = pd.read_sql("SELECT * FROM bookings WHERE company=?", conn, params=(sel_agent,))
-                p = pd.read_sql("SELECT * FROM agent_payments WHERE agent=?", conn, params=(sel_agent,))
-                conn.close()
-                ex_bytes, _, _, _ = generate_agent_statement_excel(sel_agent, b, p)
-                st.download_button(f"📊 تصدير كشف {sel_agent} اكسل", data=ex_bytes, file_name=f"STATEMENT_{sel_agent}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="dl_excel_main")
-        st.markdown("#### كل الدفعات")
-        conn=sqlite3.connect(DB)
-        pays = pd.read_sql("SELECT * FROM agent_payments ORDER BY pay_date DESC", conn)
-        conn.close()
-        if pays.empty:
-            st.info("لا يوجد دفعات بعد")
-        else:
-            st.dataframe(pays, use_container_width=True, height=500, hide_index=True)
 
 with t3:
     c1,c2,c3,c4=st.columns(4)
     with c1:
-        st.markdown("#### 👥 Agents")
+        st.markdown("#### Agents")
         na=st.text_input("New Agent", key="na")
         if st.button("Add Agent", key="add_agent"):
-            if na.strip():
-                conn=sqlite3.connect(DB)
-                conn.execute("INSERT OR IGNORE INTO agents VALUES (?)",(na.strip().upper(),))
-                conn.commit()
-                conn.close()
-                st.rerun()
-        conn=sqlite3.connect(DB)
-        agents_df=pd.read_sql("SELECT name FROM agents ORDER BY name", conn)
-        conn.close()
+            if na.strip(): conn=sqlite3.connect(DB); conn.execute("INSERT OR IGNORE INTO agents VALUES (?)",(na.strip().upper(),)); conn.commit(); conn.close(); st.rerun()
+        conn=sqlite3.connect(DB); agents_df=pd.read_sql("SELECT name FROM agents ORDER BY name", conn); conn.close()
         st.dataframe(agents_df, use_container_width=True, height=400)
     with c2:
-        st.markdown("#### 🏨 Hotels")
+        st.markdown("#### Hotels")
         nh=st.text_input("New Hotel", key="nh")
         if st.button("Add Hotel", key="add_hotel"):
-            if nh.strip():
-                conn=sqlite3.connect(DB)
-                conn.execute("INSERT OR IGNORE INTO hotels VALUES (?)",(nh.strip().upper(),))
-                conn.commit()
-                conn.close()
-                st.rerun()
-        conn=sqlite3.connect(DB)
-        hotels_df=pd.read_sql("SELECT name FROM hotels ORDER BY name", conn)
-        conn.close()
+            if nh.strip(): conn=sqlite3.connect(DB); conn.execute("INSERT OR IGNORE INTO hotels VALUES (?)",(nh.strip().upper(),)); conn.commit(); conn.close(); st.rerun()
+        conn=sqlite3.connect(DB); hotels_df=pd.read_sql("SELECT name FROM hotels ORDER BY name", conn); conn.close()
         st.dataframe(hotels_df, use_container_width=True, height=400)
     with c3:
-        st.markdown("#### ✈️ Airlines")
+        st.markdown("#### Airlines")
         nal=st.text_input("New Airline", key="nal")
         if st.button("Add Airline", key="add_airline"):
-            if nal.strip():
-                conn=sqlite3.connect(DB)
-                conn.execute("INSERT OR IGNORE INTO airlines VALUES (?)",(nal.strip().upper(),))
-                conn.commit()
-                conn.close()
-                st.rerun()
-        conn=sqlite3.connect(DB)
-        airlines_df=pd.read_sql("SELECT name FROM airlines ORDER BY name", conn)
-        conn.close()
+            if nal.strip(): conn=sqlite3.connect(DB); conn.execute("INSERT OR IGNORE INTO airlines VALUES (?)",(nal.strip().upper(),)); conn.commit(); conn.close(); st.rerun()
+        conn=sqlite3.connect(DB); airlines_df=pd.read_sql("SELECT name FROM airlines ORDER BY name", conn); conn.close()
         st.dataframe(airlines_df, use_container_width=True, height=400)
     with c4:
-        st.markdown("#### 🚌 Transport Companies")
+        st.markdown("#### Transport")
         ntr=st.text_input("New Transport Co", key="ntr")
         if st.button("Add Transport Co", key="add_transport"):
-            if ntr.strip():
-                conn=sqlite3.connect(DB)
-                conn.execute("INSERT OR IGNORE INTO transport_companies VALUES (?)",(ntr.strip().upper(),))
-                conn.commit()
-                conn.close()
-                st.rerun()
-        conn=sqlite3.connect(DB)
-        transport_df=pd.read_sql("SELECT name FROM transport_companies ORDER BY name", conn)
-        conn.close()
+            if ntr.strip(): conn=sqlite3.connect(DB); conn.execute("INSERT OR IGNORE INTO transport_companies VALUES (?)",(ntr.strip().upper(),)); conn.commit(); conn.close(); st.rerun()
+        conn=sqlite3.connect(DB); transport_df=pd.read_sql("SELECT name FROM transport_companies ORDER BY name", conn); conn.close()
         st.dataframe(transport_df, use_container_width=True, height=400)
