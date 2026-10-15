@@ -114,26 +114,37 @@ def get_sheet_client():
         return None
 
 def load_data():
-    return []
+    try:
+        sheet = get_gspread_sheet()
+        if not sheet:
+            return []
+        records = sheet.get_all_records()
+        return records
+    except Exception as e:
+        print(f"Load error: {e}")
+        return []
 
 def get_gspread_sheet():
     try:
         client = get_sheet_client()
         if not client:
             return None
-        sheet = client.open(SHEET_NAME).sheet1
+        spreadsheet = client.open(SHEET_NAME)
         try:
-            first = sheet.row_values(1)
-            if not first or first[0]!= "ID":
-                sheet.clear()
+            sheet = spreadsheet.worksheet("reservations")
+        except:
+            sheet = spreadsheet.sheet1
+        # اذا الشيت فاضي تماما حط الهيدر بس
+        try:
+            vals = sheet.get_all_values()
+            if len(vals) == 0:
                 sheet.append_row(SHEET_HEADER)
         except:
-            sheet.append_row(SHEET_HEADER)
+            pass
         return sheet
     except Exception as e:
         print(f"Sheet open failed: {e}")
         return None
-
 def booking_to_sheet_row(b):
     try:
         return [b[0], b[1], b[4], b[5], b[21] if len(b)>21 and b[21] else "", b[25] if len(b)>25 and b[25] else 1, b[6], b[2], b[3], b[7], b[12], b[13], b[14], b[15], b[16], b[17] if len(b)>17 else "", b[18] if len(b)>18 else "", b[19] if len(b)>19 else "", b[20] if len(b)>20 else "", b[23] if len(b)>23 else "", b[24] if len(b)>24 else "", b[22] if len(b)>22 else "", b[8], b[9], b[10], b[11]]
