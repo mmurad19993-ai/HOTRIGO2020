@@ -218,21 +218,21 @@ def init():
 init()
 
 if "pending" not in st.session_state:
-    st.session_state.pending=None
+    st.session_state["pending"] = None
 if "do_clear" not in st.session_state:
-    st.session_state.do_clear=False
+    st.session_state["do_clear"] = False
 if "table_version" not in st.session_state:
-    st.session_state.table_version=0
+    st.session_state["table_version"] = 0
 if "search_mode" not in st.session_state:
-    st.session_state.search_mode="الكل"
+    st.session_state["search_mode"] = "بحث"
 
-if st.session_state.do_clear:
-    for k in ["emp","pas","comp","hotel","pn","fl","tr","sell","airline","notes","vno","nights","ed","sd","dep_time","ret_time","flight_no_dep","flight_no_ret","room_type","transport_co","room_count"]:
+if st.session_state["do_clear"]:
+    for k in ["emp","pas","comp","hotel","pn","fl","tr","sell","air","note","vno","sd","ed","xd","ftd","ftr","fti","fto"]:
         if k in st.session_state:
             try: del st.session_state[k]
             except: pass
-    st.session_state.do_clear=False
-    st.session_state.pending=None
+    st.session_state["do_clear"] = False
+    st.session_state["pending"] = None
 
 def to_f(s):
     try: return float(str(s).replace(",","").strip()) if str(s).strip()!="" else 0.0
