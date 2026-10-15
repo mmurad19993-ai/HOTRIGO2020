@@ -177,22 +177,26 @@ def sync_booking_to_sheet(booking_id):
 def sync_all_to_sheet():
     try:
         sheet = get_gspread_sheet()
-        if not sheet: return False
-        conn=sqlite3.connect(DB)
+        if not sheet:
+            return False
+        conn = sqlite3.connect(DB)
         all_b = conn.execute("SELECT * FROM bookings ORDER BY id").fetchall()
         conn.close()
         rows = [SHEET_HEADER]
         for b in all_b:
             r = booking_to_sheet_row(b)
-            if r: rows.append(r)
+            if r:
+                rows.append(r)
+        if len(rows) <= 1:
+            print("No bookings to sync")
+            return False
         sheet.clear()
-        sheet.update("A1", rows, value_input_option='USER_ENTERED')
+        sheet.update(range_name='A1', values=rows, value_input_option='USER_ENTERED')
         print(f"✅ Synced all {len(rows)-1}")
         return True
     except Exception as e:
         print(f"Sync all failed {e}")
         return False
-
 try:
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.pdfgen import canvas
