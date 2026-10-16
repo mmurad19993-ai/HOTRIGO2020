@@ -1248,7 +1248,7 @@ with t3:
                 if st.button("🗑️ Delete", key="delb_h_4col", use_container_width=True):
                     conn=sqlite3.connect(DB); conn.execute("DELETE FROM hotels WHERE name=?", (dh,)); conn.commit(); conn.close(); st.rerun()
 
-    with c3:
+        with c3:
         with st.container(border=True):
             st.markdown("#### ✈️ Airlines")
             nal = st.text_input("Airline", key="nal_4col", placeholder="e.g. Turkish Airlines", label_visibility="collapsed")
@@ -1260,7 +1260,7 @@ with t3:
             conn=sqlite3.connect(DB); dfal=pd.read_sql("SELECT name as Airlines FROM airlines ORDER BY name", conn); conn.close()
             st.dataframe(dfal, use_container_width=True, height=250, hide_index=True)
             if not dfal.empty:
-                dal=st.selectbox("Del", dfal['Airlines'].tolist(), key="del_al_4col", label_visibility="collapsed")
+                dal=st.selectbox("", dfal['Airlines'].tolist(), key="del_al_4col", label_visibility="collapsed", placeholder="Select airline to delete...")
                 if st.button("🗑️ Delete", key="delb_al_4col", use_container_width=True):
                     conn=sqlite3.connect(DB); conn.execute("DELETE FROM airlines WHERE name=?", (dal,)); conn.commit(); conn.close(); st.rerun()
 
@@ -1276,6 +1276,6 @@ with t3:
             conn=sqlite3.connect(DB); dft=pd.read_sql("SELECT name as Transport FROM transport_companies ORDER BY name", conn); conn.close()
             st.dataframe(dft, use_container_width=True, height=250, hide_index=True)
             if not dft.empty:
-                dt=st.selectbox("Del", dft['Transport'].tolist(), key="del_t_4col", label_visibility="collapsed")
+                dt=st.selectbox("", dft['Transport'].tolist(), key="del_t_4col", label_visibility="collapsed", placeholder="Select transport to delete...")
                 if st.button("🗑️ Delete", key="delb_t_4col", use_container_width=True):
                     conn=sqlite3.connect(DB); conn.execute("DELETE FROM transport_companies WHERE name=?", (dt,)); conn.commit(); conn.close(); st.rerun()
