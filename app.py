@@ -744,9 +744,9 @@ with t1:
     if cost_total > 0:
         st.caption(f"💰 الكوست صار علينا: ${cost_total:,.2f}")
 
-    notes=st.text_input("Note", key="notes")
-    airline=st.text_input("Airline (empty=no flight)", key="airline", placeholder="")
-    vno=st.text_input("Voucher No", key="vno")
+notes=st.text_input("Note", key="notes")
+airline=st.text_input("Airline (empty=no flight)", key="airline", placeholder="")
+vno=st.text_input("Voucher No", key="vno")
     with st.expander("➕ Show More / باقي المعلومات - المزيد", expanded=False):
             c_dep, c_ret=st.columns(2)
             with c_dep: dep_time=st.text_input("Departure Time", key="dep_time", placeholder="10:30")
