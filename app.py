@@ -654,18 +654,14 @@ def edit_dialog(row):
     with c6:
         cur_rc = gv("room_count")
         init_val = "" if cur_rc in ["0", "1", "None", ""] else cur_rc
-        if cur_rc == "1":
-            init_val = ""
+        if cur_rc == "1": init_val = ""
         e_rc_text = st.text_input("Number of Rooms", value=init_val, placeholder="Empty = 0", key="dlg_rc")
 
     c7, c8 = st.columns(2)
     with c7:
         current_hotel = gv("hotel")
         if 'hotels_for_js' in globals() and hotels_for_js:
-            if current_hotel in hotels_for_js:
-                idx = hotels_for_js.index(current_hotel)
-            else:
-                idx = 0
+            idx = hotels_for_js.index(current_hotel) if current_hotel in hotels_for_js else 0
             e_hotel = st.selectbox("Hotel *", hotels_for_js, index=idx, key="dlg_hotel")
         else:
             e_hotel = st.text_input("Hotel *", value=current_hotel, key="dlg_hotel")
@@ -699,63 +695,66 @@ def edit_dialog(row):
 
     e_trans_co = st.text_input("Transport Company (empty=no transfer)", value=gv("transport_company"), key="dlg_transco")
 
-    # ===== تحكم الأسهم بكل الجهات + Enter =====
+    # ===== FIX : ترتيب صحيح بدون نط غلط =====
     components.html("""
     <script>
     const doc = window.parent.document;
-    function getDialogInputs(){
+    function getOrderedFields(){
         const dlg = doc.querySelector('div[data-testid="stDialog"]');
         if(!dlg) return [];
-        // كل الحقول القابلة للتركيز جوا الدايلوغ
-        return Array.from(dlg.querySelectorAll('input, textarea, select, div[data-baseweb="select"] input'))
-               .filter(el => el.offsetParent !== null && !el.disabled);
+        const list = [];
+        // نمر على كل بلوك بالترتيب المرئي وناخد حقل واحد فقط منه
+        dlg.querySelectorAll('[data-testid="stTextInput"], [data-testid="stTextArea"], [data-testid="stSelectbox"]').forEach(w=>{
+            let el = null;
+            if(w.dataset.testid === 'stSelectbox'){
+                el = w.querySelector('div[role="combobox"]');
+            } else {
+                el = w.querySelector('input, textarea');
+            }
+            if(el && el.offsetParent !== null) list.push(el);
+        });
+        return list;
     }
-    function focusNext(current, dir){
-        const inputs = getDialogInputs();
-        const idx = inputs.indexOf(current);
-        if(idx === -1) return;
+    function focusNext(fields, curr, dir){
+        let idx = fields.indexOf(curr);
+        if(idx===-1){
+            // اذا الـ active هو input جوا الـ wrapper
+            const wrapper = curr.closest ? curr.closest('[data-testid="stTextInput"], [data-testid="stTextArea"], [data-testid="stSelectbox"]') : null;
+            if(wrapper){
+                const inner = wrapper.querySelector('div[role="combobox"]') || wrapper.querySelector('input, textarea');
+                idx = fields.indexOf(inner);
+            }
+        }
+        if(idx===-1) return;
         let n = idx + dir;
         if(n < 0) n = 0;
-        if(n >= inputs.length){
-            // اذا وصلنا لآخر حقل اضغط Save
-            const saveBtn = doc.querySelector('div[data-testid="stDialog"] button[kind="primary"]');
-            if(saveBtn) saveBtn.click();
+        if(n >= fields.length){
+            const btn = doc.querySelector('div[data-testid="stDialog"] button[kind="primary"]');
+            if(btn) btn.click();
             return;
         }
-        inputs[n].focus();
-        if(inputs[n].select) inputs[n].select();
+        fields[n].focus();
+        try{ if(fields[n].tagName==='INPUT') fields[n].select(); }catch(e){}
     }
     doc.addEventListener('keydown', function(e){
         const dlg = doc.querySelector('div[data-testid="stDialog"]');
         if(!dlg || !dlg.contains(doc.activeElement)) return;
-        const el = doc.activeElement;
-        const isTextArea = el.tagName === 'TEXTAREA';
-        
-        if(e.key === 'Enter' && !isTextArea){
-            e.preventDefault();
-            focusNext(el, 1);
+        const fields = getOrderedFields();
+        const curr = doc.activeElement;
+        const isArea = curr.tagName === 'TEXTAREA';
+
+        if(e.key === 'Enter' && !isArea){
+            e.preventDefault(); focusNext(fields, curr, 1);
         } else if(e.key === 'ArrowDown'){
-            // في الـ textarea خليه يتحرك جوا النص الا اذا ضغط Ctrl
-            if(isTextArea && !e.ctrlKey) return;
-            e.preventDefault();
-            focusNext(el, 1);
+            if(isArea && !e.ctrlKey) return;
+            e.preventDefault(); focusNext(fields, curr, 1);
         } else if(e.key === 'ArrowUp'){
-            if(isTextArea && !e.ctrlKey) return;
-            e.preventDefault();
-            focusNext(el, -1);
-        } else if(e.key === 'ArrowRight'){
-            // اذا المؤشر بآخر الحقل انتقل لليمين
-            if(el.selectionStart === el.value.length || el.tagName !== 'INPUT'){
-                if(e.ctrlKey || el.selectionStart === el.value.length){
-                    e.preventDefault();
-                    focusNext(el, 1);
-                }
-            }
-        } else if(e.key === 'ArrowLeft'){
-            if(el.selectionStart === 0){
-                e.preventDefault();
-                focusNext(el, -1);
-            }
+            if(isArea && !e.ctrlKey) return;
+            e.preventDefault(); focusNext(fields, curr, -1);
+        } else if(e.key === 'ArrowRight' && curr.selectionStart === curr.value.length){
+            e.preventDefault(); focusNext(fields, curr, 1);
+        } else if(e.key === 'ArrowLeft' && curr.selectionStart === 0){
+            e.preventDefault(); focusNext(fields, curr, -1);
         }
     }, true);
     </script>
@@ -765,9 +764,7 @@ def edit_dialog(row):
         try:
             s = e_rc_text.strip()
             e_rc_final = 0 if s == "" else int(float(s))
-        except:
-            e_rc_final = 0
-
+        except: e_rc_final = 0
         comp_full, comp_ok = smart_match(e_comp, agents_for_js, agents_upper)
         hotel_full, hotel_ok = smart_match(e_hotel, hotels_for_js, hotels_upper)
         is_no_flight = e_air.strip() == "" or e_air.strip() == "0"
@@ -776,7 +773,6 @@ def edit_dialog(row):
         trans_full, trans_ok = ("", True) if is_no_trans else smart_match(e_trans_co, transport_for_js, transport_upper)
         if not comp_ok or not hotel_ok or not air_ok or not trans_ok:
             st.error("Agent/Hotel/Airline/Transport not found!"); return
-
         conn = sqlite3.connect(DB)
         for col in ["price_per_night REAL","flight_cost REAL","transport_cost REAL","notes TEXT","voucher_no TEXT","dep_airport TEXT","ret_airport TEXT"]:
             try: conn.execute(f"ALTER TABLE bookings ADD COLUMN {col}")
