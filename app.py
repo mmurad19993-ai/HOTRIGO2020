@@ -767,8 +767,8 @@ with t1:
             elif not airline_ok: st.error(f"❌ Airline '{airline}' not found!")
             elif not transport_ok: st.error(f"❌ Transport '{transport_co}' not found!")
             else:
-                ht_tot=pn*nights_val*rc_for_calc; cost=ht_tot+fl+tr; profit=sell-cost
-                st.session_state["pending"]={"sale_date":str(sd),"entry_date":str(ed),"exit_date":str(xd),"company":comp_full,"passengers":pas.strip(),"hotel":hotel_full,"room_type":room_type.strip(),"room_count":int(room_count),"nights":int(nights),"price_night":float(pn),"hotel_total":float(ht_tot),"flight":float(fl),"transport":float(tr),"sell":float(sell),"cost":float(cost),"profit":float(profit),"voucher":vno,"notes":notes,"airline":airline_full,"emp":emp.strip(),"dep":dep_time.strip(),"ret":ret_time.strip(),"transport_company":transport_full,"fno_dep":flight_no_dep.strip(),"fno_ret":flight_no_ret.strip()}
+                ht_tot=to_f(pn)*to_f(nights)*to_f(room_count); cost=ht_tot+to_f(fl)+to_f(tr); profit=to_f(sell)-cost
+                st.session_state["pending"]={"sale_date":str(sd),"entry_date":str(ed),"exit_date":str(xd),"company":comp_full,"passengers":pas.strip(),"hotel":hotel_full,"room_type":room_type.strip(),"room_count":int(to_f(room_count)),"nights":int(to_f(nights)),"price_night":float(to_f(pn)),"hotel_total":float(ht_tot),"flight":float(to_f(fl)),"transport":float(to_f(tr)),"sell":float(to_f(sell)),"cost":float(cost),"profit":float(profit),"voucher":vno,"notes":notes,"airline":airline_full,"emp":emp.strip(),"dep":dep_time.strip(),"ret":ret_time.strip(),"transport_company":transport_full,"fno_dep":flight_no_dep.strip(),"fno_ret":flight_no_ret.strip()}
         if st.session_state.pending:
             d=st.session_state.pending
             st.warning(f"✅ {d['company']} - {d['passengers'].split(chr(10))[0]} | {d['room_count']} Rooms | Sell ${d['sell']:.2f}")
