@@ -551,51 +551,81 @@ components.html(js_code, height=0)
 def edit_dialog(row):
     def safe_int(v, default=1):
         try:
-            s = str(v).strip().split()[0].split(" ")[0].split(".")[0]
-            if not s or not s.lstrip("-").isdigit():
-                return default
-            return int(s)
+            s = str(v).strip().split()[0].split(".")[0]
+            return int(s) if s.lstrip("-").isdigit() else default
+        except:
+            return default
+    def gv(idx, default=""):
+        try:
+            return row[idx] if len(row) > idx and row[idx] is not None else default
         except:
             return default
 
-    # row[25] عندك فيه تاريخ - عم ندور على عدد الغرف بالعمود الصح
-    raw_rc = 1
-    # جرب 25 أول شي، اذا طلع تاريخ جرب الأعمدة التانية
-    for idx in [25, 7, 8, 9, 10, 11]:
-        if len(row) > idx and row[idx] not in (None, "", "0"):
-            val = str(row[idx])
-            # اذا تاريخ تجاهلو
-            if "-" in val and "2026" in val:
-                continue
-            if "20" in val and ":" in val: # وقت
-                continue
-            raw_rc = val
-            break
-
+    # تصليح مشكلة row[25] يلي فيه تاريخ
+    raw_rc = gv(25, 1)
+    if "-" in str(raw_rc) or ":" in str(raw_rc):
+        for i in [7, 8, 9, 10, 11]:
+            v = gv(i,"")
+            if str(v).isdigit():
+                raw_rc = v
+                break
     rc_val = safe_int(raw_rc, 1)
-    if rc_val < 1: rc_val = 1
-    if rc_val > 20: rc_val = 20
+    rc_val = max(1, min(20, rc_val))
 
-    st.info(f"Editing booking #{row[0]} - {row[4]}")
-    col_left, col_right = st.columns(2)
-    with col_left:
-        e_sale = st.text_input("Sale Date", value=row[1], key="dlg_sale")
-        e_comp = st.text_input("Agent *", value=row[4], key="dlg_comp")
-        e_pas = st.text_area("Passengers", value=row[5], height=130, key="dlg_pas")
-        e_room = st.text_input("Room Type", value=row[21] if len(row)>21 and row[21] else "", key="dlg_room")
-        e_rc = st.number_input("Number of Rooms", 1, 20, rc_val, key="dlg_rc")
-        e_hotel = st.text_input("Hotel *", value=row[6], key="dlg_hotel")
-        e_fno_dep = st.text_input("Flight No Dep", value=row[23] if len(row)>23 and row[23] else "", key="dlg_fno_dep")
-        e_air = st.text_input("Airline", value=row[17] or "", key="dlg_air")
-    with col_right:
-        e_entry = st.text_input("Entry Date", value=row[2], key="dlg_en")
-        e_exit = st.text_input("Exit Date", value=row[3], key="dlg_ex")
-        e_sell = st.text_input("Selling Price $", value=str(row[12]), key="dlg_sell")
-        e_dep = st.text_input("Departure Time", value=row[19] or "", key="dlg_dep")
-        e_ret = st.text_input("Return Time", value=row[20] or "", key="dlg_ret")
-        e_fno_ret = st.text_input("Flight No Ret", value=row[24] if len(row)>24 and row[24] else "", key="dlg_fno_ret")
-        e_trans_co = st.text_input("Transport Company", value=row[22] if len(row)>22 and row[22] else "", key="dlg_transco")
-        e_emp = st.text_input("Employee", value=row[18] or "", key="dlg_emp")
+    st.info(f"Editing booking #{gv(0)} - {gv(4)}")
+
+    # === نفس ترتيب صفحة Sales ===
+    c1, c2 = st.columns(2)
+    with c1: e_sale = st.text_input("Sale Date", value=gv(1), key="dlg_sale")
+    with c2: e_entry = st.text_input("Entry Date", value=gv(2), key="dlg_en")
+
+    c3, c4 = st.columns(2)
+    with c3: e_exit = st.text_input("Exit Date", value=gv(3), key="dlg_ex")
+    with c4: e_comp = st.text_input("Agent *", value=gv(4), key="dlg_comp")
+
+    e_pas = st.text_area("Passengers", value=gv(5), height=130, key="dlg_pas")
+
+    c5, c6 = st.columns(2)
+    with c5: e_room = st.text_input("Room Type", value=gv(21,""), key="dlg_room")
+    with c6: e_rc = st.number_input("Number of Rooms", 1, 20, rc_val, key="dlg_rc")
+
+    c7, c8 = st.columns(2)
+    with c7: e_hotel = st.text_input("Hotel *", value=gv(6), key="dlg_hotel")
+    with c8: e_emp = st.text_input("Employee", value=gv(18,""), key="dlg_emp")
+
+    c_price, c_flight = st.columns(2)
+    with c_price: e_pn = st.text_input("Price per Night $", value=str(gv(9,"") if len(row)>9 else ""), key="dlg_pn")
+    with c_flight: e_fl = st.text_input("Flight $", value=str(gv(10,"") if len(row)>10 else ""), key="dlg_fl")
+
+    c_trans, c_sell = st.columns(2)
+    with c_trans: e_tr = st.text_input("Transport $", value=str(gv(11,"") if len(row)>11 else ""), key="dlg_tr")
+    with c_sell: e_sell = st.text_input("Selling Price $ *", value=str(gv(12,"")), key="dlg_sell")
+
+    try:
+        cost_total = (to_f(e_pn) * int(e_rc) + to_f(e_fl) + to_f(e_tr))
+        if cost_total > 0:
+            st.caption(f"💰 الكوست صار علينا: ${cost_total:,.2f}")
+    except:
+        pass
+
+    e_notes = st.text_input("Note", value=gv(15,"") if len(row)>15 else "", key="dlg_notes")
+
+    c_air, c_vno = st.columns(2)
+    with c_air: e_air = st.text_input("Airline (empty=no flight)", value=gv(17,""), key="dlg_air")
+    with c_vno: e_vno = st.text_input("Voucher No", value=gv(16,"") if len(row)>16 else "", key="dlg_vno")
+
+    with st.expander("➕ Show More / باقي المعلومات - المزيد", expanded=False):
+        c_dep, c_ret = st.columns(2)
+        with c_dep: e_dep = st.text_input("Departure Time", value=gv(19,""), key="dlg_dep", placeholder="10:30")
+        with c_ret: e_ret = st.text_input("Return Time", value=gv(20,""), key="dlg_ret", placeholder="18:45")
+        c_fno_dep, c_fno_ret = st.columns(2)
+        with c_fno_dep: e_fno_dep = st.text_input("Flight No Dep", value=gv(23,""), key="dlg_fno_dep", placeholder="TK2026")
+        with c_fno_ret: e_fno_ret = st.text_input("Flight No Ret", value=gv(24,""), key="dlg_fno_ret", placeholder="TK2027")
+        c_air_dep, c_air_ret = st.columns(2)
+        with c_air_dep: e_dep_air = st.text_input("Departure Airport", value=gv(26,"") if len(row)>26 else "", key="dlg_dep_air", placeholder="IST")
+        with c_air_ret: e_ret_air = st.text_input("Return Airport", value=gv(27,"") if len(row)>27 else "", key="dlg_ret_air", placeholder="BEY")
+        e_trans_co = st.text_input("Transport Company (empty=no transfer)", value=gv(22,""), key="dlg_transco")
+
     if st.button("Save", type="primary", use_container_width=True):
         comp_full, comp_ok = smart_match(e_comp, agents_for_js, agents_upper)
         hotel_full, hotel_ok = smart_match(e_hotel, hotels_for_js, hotels_upper)
@@ -606,8 +636,17 @@ def edit_dialog(row):
         if not comp_ok or not hotel_ok or not air_ok or not trans_ok:
             st.error("Agent/Hotel/Airline/Transport not found!"); return
         conn = sqlite3.connect(DB)
-        conn.execute("UPDATE bookings SET sale_date=?, company=?, passengers=?, room_type=?, room_count=?, hotel=?, entry_date=?, exit_date=?, sell=?, airline=?, emp=?, flight_dep_time=?, flight_ret_time=?, transport_company=?, flight_no_dep=?, flight_no_ret=? WHERE id=?",
-                     (e_sale, comp_full, e_pas, e_room, int(e_rc), hotel_full, e_entry, e_exit, to_f(e_sell), air_full, e_emp, e_dep, e_ret, trans_full, e_fno_dep, e_fno_ret, row[0]))
+        for col in ["price_per_night REAL","flight_cost REAL","transport_cost REAL","notes TEXT","voucher_no TEXT","dep_airport TEXT","ret_airport TEXT"]:
+            try: conn.execute(f"ALTER TABLE bookings ADD COLUMN {col}")
+            except: pass
+        conn.execute("""UPDATE bookings SET sale_date=?, company=?, passengers=?, room_type=?, room_count=?, hotel=?,
+            entry_date=?, exit_date=?, price_per_night=?, flight_cost=?, transport_cost=?, sell=?,
+            notes=?, voucher_no=?, airline=?, emp=?, flight_dep_time=?, flight_ret_time=?,
+            transport_company=?, flight_no_dep=?, flight_no_ret=?, dep_airport=?, ret_airport=?
+            WHERE id=?""",
+            (e_sale, comp_full, e_pas, e_room, int(e_rc), hotel_full, e_entry, e_exit,
+             to_f(e_pn), to_f(e_fl), to_f(e_tr), to_f(e_sell), e_notes, e_vno, air_full, e_emp,
+             e_dep, e_ret, trans_full, e_fno_dep, e_fno_ret, e_dep_air, e_ret_air, row[0]))
         conn.commit(); conn.close()
         with st.spinner("جاري التحديث في Google Sheet..."):
             sync_booking_to_sheet(row[0])
