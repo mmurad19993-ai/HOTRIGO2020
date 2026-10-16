@@ -1384,7 +1384,6 @@ with t2:
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         book_export.to_excel(writer, sheet_name='Bookings', index=False)
         pay_export.to_excel(writer, sheet_name='Payments', index=False)
-
     output.seek(0)
     return output.getvalue()
 
@@ -1454,7 +1453,6 @@ with left_side:
                 )
             else:
                 st.button("🖨️ Print PDF", disabled=True, use_container_width=True, key=f"dis_pdf_{pay_agent}")
-
         with b2:
             if excel_bytes:
                 st.download_button(
