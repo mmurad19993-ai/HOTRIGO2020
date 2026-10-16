@@ -1205,10 +1205,16 @@ with t2:
 
     with c3:
         from io import BytesIO
+        from openpyxl.styles import Alignment
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df_display.to_excel(writer, index=False, sheet_name="Statement")
-        st.download_button("📊 تصدير Excel", output.getvalue(), file_name=f"{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="dl_excel")
+            ws = writer.sheets["Statement"]
+            for row in ws.iter_rows():
+                for cell in row:
+                    cell.alignment = Alignment(wrap_text=True, vertical='top')
+            ws.column_dimensions['C'].width = 35
+        st.download_button("📥 تصدير Excel", output.getvalue(), file_name=f"{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_excel_final_{view_agent}")
 
     st.dataframe(df_display, use_container_width=True, hide_index=True)
     st.divider()
@@ -1216,95 +1222,29 @@ with t2:
     col_pay1, col_pay2 = st.columns([1,2])
     with col_pay1:
         st.markdown("#### اضافة دفعة جديدة")
-        conn=sqlite3.connect(DB); agents_list=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]; conn.close()
-        pay_agent = st.selectbox("اختر الوكيل", agents_list, key="pay_agent")
-        pay_date = st.date_input("تاريخ الدفعة", datetime.now(), key="pay_date")
-        pay_amount = st.text_input("المبلغ $", key="pay_amount")
-        pay_note = st.text_input("ملاحظة", key="pay_note", placeholder="تحويل بنكي - كاش...")
-        if st.button("اضافة دفعة", type="primary", use_container_width=True):
+        conn=sqlite3.connect(DB)
+        agents_list=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]
+        conn.close()
+        pay_agent = st.selectbox("اختر الوكيل", agents_list, key="pay_agent_final_fixed")
+        pay_date = st.date_input("تاريخ الدفعة", datetime.now(), key="pay_date_final_fixed")
+        pay_amount = st.text_input("المبلغ $", key="pay_amount_final_fixed")
+        pay_note = st.text_input("ملاحظة", key="pay_note_final_fixed", placeholder="تحويل بنكي - كاش...")
+        if st.button("اضافة دفعة", type="primary", use_container_width=True, key="btn_add_pay_fixed"):
             amt = to_f(pay_amount)
-            if not pay_agent or amt<=0: st.error("اختر وكيل ومبلغ صحيح")
+            if not pay_agent or amt<=0:
+                st.error("اختر وكيل ومبلغ صحيح")
             else:
-                conn=sqlite3.connect(DB); conn.execute("INSERT INTO agent_payments (agent, pay_date, amount, note) VALUES (?,?,?,?)", (pay_agent, str(pay_date), amt, pay_note)); conn.commit(); conn.close()
-                st.success(f"تم اضافة ${amt} للوكيل {pay_agent}"); st.rerun()
+                conn=sqlite3.connect(DB)
+                conn.execute("INSERT INTO agent_payments (agent, pay_date, amount, note) VALUES (?,?,?,?)", (pay_agent, str(pay_date), amt, pay_note))
+                conn.commit(); conn.close()
+                st.success(f"تم اضافة ${amt} للوكيل {pay_agent}")
+                st.rerun()
     with col_pay2:
         st.markdown("#### ملخص الأرصدة")
         conn=sqlite3.connect(DB)
-        summary = pd.read_sql("SELECT b.company as Agent, SUM(b.sell) as Total_Sales, (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Total_Paid, SUM(b.sell) - (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Balance FROM bookings b GROUP BY b.company", conn)
+        summary2 = pd.read_sql("SELECT b.company as Agent, SUM(b.sell) as Total_Sales, (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Total_Paid, SUM(b.sell) - (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Balance FROM bookings b GROUP BY b.company", conn)
         conn.close()
-        st.dataframe(summary, use_container_width=True, hide_index=True)
-
-    with c3:
-        from io import BytesIO
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_display.to_excel(writer, index=False, sheet_name="Statement")
-        st.download_button("📊 تصدير Excel", output.getvalue(), file_name=f"{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="dl_excel")
-
-    st.dataframe(df_display, use_container_width=True, hide_index=True)
-
-    with c3:
-        from io import BytesIO
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_agent.to_excel(writer, index=False, sheet_name="Statement")
-        st.download_button("📊 تصدير Excel", output.getvalue(), file_name=f"{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="dl_excel")
-
-    st.dataframe(df_agent, use_container_width=True, hide_index=True)
-    st.divider()
-
-    col_pay1, col_pay2 = st.columns([1,2])
-    with col_pay1:
-        st.markdown("#### اضافة دفعة جديدة")
-        conn=sqlite3.connect(DB); agents_list=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]; conn.close()
-        pay_agent = st.selectbox("اختر الوكيل", agents_list, key="pay_agent")
-        pay_date = st.date_input("تاريخ الدفعة", datetime.now(), key="pay_date")
-        pay_amount = st.text_input("المبلغ $", key="pay_amount")
-        pay_note = st.text_input("ملاحظة", key="pay_note", placeholder="تحويل بنكي - كاش...")
-        if st.button("اضافة دفعة", type="primary", use_container_width=True):
-            amt = to_f(pay_amount)
-            if not pay_agent or amt<=0: st.error("اختر وكيل ومبلغ صحيح")
-            else:
-                conn=sqlite3.connect(DB); conn.execute("INSERT INTO agent_payments (agent, pay_date, amount, note) VALUES (?,?,?,?)", (pay_agent, str(pay_date), amt, pay_note)); conn.commit(); conn.close()
-                st.success(f"تم اضافة ${amt} للوكيل {pay_agent}"); st.rerun()
-    with col_pay2:
-        st.markdown("#### ملخص الأرصدة")
-        conn=sqlite3.connect(DB)
-        summary = pd.read_sql("SELECT b.company as Agent, SUM(b.sell) as Total_Sales, (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Total_Paid, SUM(b.sell) - (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Balance FROM bookings b GROUP BY b.company", conn)
-        conn.close()
-        st.dataframe(summary, use_container_width=True, hide_index=True)
-
-    with c3:
-        from io import BytesIO
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_agent.to_excel(writer, index=False, sheet_name="Statement")
-        st.download_button("📊 تصدير Excel", output.getvalue(), file_name=f"{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="dl_excel")
-
-    st.dataframe(df_agent, use_container_width=True, hide_index=True)
-    st.divider()
-
-    # --- كودك القديم يبلش من هون ---
-    col_pay1, col_pay2 = st.columns([1,2])
-    with col_pay1:
-        st.markdown("#### اضافة دفعة جديدة")
-        conn=sqlite3.connect(DB); agents_list=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]; conn.close()
-        pay_agent = st.selectbox("اختر الوكيل", agents_list, key="pay_agent")
-        pay_date = st.date_input("تاريخ الدفعة", datetime.now(), key="pay_date")
-        pay_amount = st.text_input("المبلغ $", key="pay_amount")
-        pay_note = st.text_input("ملاحظة", key="pay_note", placeholder="تحويل بنكي - كاش...")
-        if st.button("اضافة دفعة", type="primary", use_container_width=True):
-            amt = to_f(pay_amount)
-            if not pay_agent or amt<=0: st.error("اختر وكيل ومبلغ صحيح")
-            else:
-                conn=sqlite3.connect(DB); conn.execute("INSERT INTO agent_payments (agent, pay_date, amount, note) VALUES (?,?,?,?)", (pay_agent, str(pay_date), amt, pay_note)); conn.commit(); conn.close()
-                st.success(f"تم اضافة ${amt} للوكيل {pay_agent}"); st.rerun()
-    with col_pay2:
-        st.markdown("#### ملخص الأرصدة")
-        conn=sqlite3.connect(DB)
-        summary = pd.read_sql("SELECT b.company as Agent, SUM(b.sell) as Total_Sales, (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Total_Paid, SUM(b.sell) - (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Balance FROM bookings b GROUP BY b.company", conn)
-        conn.close()
-        st.dataframe(summary, use_container_width=True, hide_index=True)
+        st.dataframe(summary2, use_container_width=True, hide_index=True)
 
 with t3:
     c1,c2,c3,c4=st.columns(4)
