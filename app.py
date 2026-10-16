@@ -147,8 +147,39 @@ def get_gspread_sheet():
         return None
 def booking_to_sheet_row(b):
     try:
-        # حول كل قيمة لنص وما ترجع None ابداً
-        return [str(x) if x is not None else "" for x in b]
+        import sqlite3
+        from datetime import datetime
+        if isinstance(b, (list, tuple)):
+            conn = sqlite3.connect(DB)
+            conn.row_factory = sqlite3.Row
+            r = conn.execute("SELECT * FROM bookings WHERE id=?", (int(b[0]),)).fetchone()
+            conn.close()
+            if not r: return None
+            d = dict(r)
+        else:
+            try: d = dict(b)
+            except: d = {k: b[k] for k in b.keys()}
+        def gv(k, default=""):
+            v = d.get(k, default)
+            return "" if v is None else v
+        def to_f(v):
+            try: return float(str(v).replace(",", "").strip() or 0)
+            except: return 0.0
+        nights = 0
+        try:
+            from datetime import datetime as dt
+            en = dt.strptime(str(gv("entry_date"))[:10], "%Y-%m-%d")
+            ex = dt.strptime(str(gv("exit_date"))[:10], "%Y-%m-%d")
+            nights = max(0, (ex - en).days)
+        except: nights = 0
+        try: room_count = 0 if str(gv("room_count")).strip()=="" else int(float(str(gv("room_count"))))
+        except: room_count = 0
+        sell = to_f(gv("sell"))
+        cost = to_f(gv("price_per_night"))*room_count*(nights if nights>0 else 1)+to_f(gv("flight_cost"))+to_f(gv("transport_cost"))
+        if room_count==0: cost = to_f(gv("flight_cost"))+to_f(gv("transport_cost"))
+        profit = sell-cost
+        row = [gv("id"),gv("sale_date"),gv("company"),gv("passengers"),gv("room_type"),room_count,gv("hotel"),gv("entry_date"),gv("exit_date"),nights,sell,cost,profit,gv("flight_cost"),gv("transport_cost"),gv("price_per_night"),gv("notes"),gv("voucher_no"),gv("airline"),gv("emp"),gv("flight_dep_time"),gv("flight_ret_time"),gv("transport_company"),gv("flight_no_dep"),gv("flight_no_ret"),gv("dep_airport"),gv("ret_airport")]
+        return [str(x) if x is not None else "" for x in row]
     except Exception as e:
         print(f"booking_to_sheet_row error {e} for {b}")
         return None
