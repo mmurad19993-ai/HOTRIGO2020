@@ -1051,35 +1051,41 @@ if view_btn:
                     overflow-y:auto; 
                     border:1px solid #ddd; 
                     border-radius:6px; 
-                    padding:8px; 
+                    padding:6px 8px; 
                     background:#f9f9f9; 
                     font-size:16px; 
                     font-weight:900; 
                     white-space:pre-line;
+                    margin-top:0;
                 }
                 </style>
                 """, unsafe_allow_html=True)
                 pax = f"<div class='pax-box'>{d.get('passengers','')}</div>"
 
                 # --- فوق ---
-                st.markdown("<p style='font-weight:900; font-size:15px;'>Passengers:</p>", unsafe_allow_html=True)
+                st.markdown("<p style='font-weight:900; font-size:15px; margin:0 0 2px 0;'>Passengers:</p>", unsafe_allow_html=True)
                 st.markdown(pax, unsafe_allow_html=True)
-                st.markdown(f"<p style='font-weight:900; font-size:15px;'>Hotel: {d.get('hotel','')}</p>", unsafe_allow_html=True)
-                st.markdown(f"<p style='font-weight:900; font-size:15px;'>Check-in: {d.get('entry_date','')}</p>", unsafe_allow_html=True)
-                st.markdown(f"<p style='font-weight:900; font-size:15px;'>Departure: {d.get('flight_dep_time','')} {d.get('dep_airport','')}</p>", unsafe_allow_html=True)
-                st.markdown(f"<p style='font-weight:900; font-size:15px;'>Flight No: {d.get('flight_no_dep','')}</p>", unsafe_allow_html=True)
                 
-                # --- مسافة صغيرة ---
+                st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True) # بين الاسم والفندق
+                st.markdown(f"<p style='font-weight:900; font-size:15px; margin:0;'>Hotel: {d.get('hotel','')}</p>", unsafe_allow_html=True)
+                
+                st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True) # بين الفندق وباقي التفاصيل
+                st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Check-in: {d.get('entry_date','')}</p>", unsafe_allow_html=True)
+                st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Departure: {d.get('flight_dep_time','')} {d.get('dep_airport','')}</p>", unsafe_allow_html=True)
+                st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Flight No: {d.get('flight_no_dep','')}</p>", unsafe_allow_html=True)
+                
                 st.markdown("<div style='height:50px;'></div>", unsafe_allow_html=True)
                 st.divider()
                 
                 # --- تحت ---
-                st.markdown(f"<p style='font-weight:900; font-size:15px;'>Hotel: {d.get('hotel','')}</p>", unsafe_allow_html=True)
-                st.markdown("<p style='font-weight:900; font-size:15px;'>Passengers:</p>", unsafe_allow_html=True)
+                st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Hotel: {d.get('hotel','')}</p>", unsafe_allow_html=True)
+                st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+                st.markdown("<p style='font-weight:900; font-size:15px; margin:0 0 2px 0;'>Passengers:</p>", unsafe_allow_html=True)
                 st.markdown(pax, unsafe_allow_html=True)
-                st.markdown(f"<p style='font-weight:900; font-size:15px;'>Check-out: {d.get('exit_date','')}</p>", unsafe_allow_html=True)
-                st.markdown(f"<p style='font-weight:900; font-size:15px;'>Return: {d.get('flight_ret_time','')} {d.get('ret_airport','')}</p>", unsafe_allow_html=True)
-                st.markdown(f"<p style='font-weight:900; font-size:15px;'>Flight No: {d.get('flight_no_ret','')}</p>", unsafe_allow_html=True)
+                st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+                st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Check-out: {d.get('exit_date','')}</p>", unsafe_allow_html=True)
+                st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Return: {d.get('flight_ret_time','')} {d.get('ret_airport','')}</p>", unsafe_allow_html=True)
+                st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Flight No: {d.get('flight_no_ret','')}</p>", unsafe_allow_html=True)
 
             view_dialog()
 with t2:
