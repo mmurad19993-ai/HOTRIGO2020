@@ -1105,20 +1105,15 @@ with t2:
     df_raw = pd.read_sql("SELECT * FROM bookings WHERE company=? ORDER BY entry_date DESC", conn, params=(view_agent,))
     conn.close()
 
-    # --- تجهيز الكشف بالاعمدة المطلوبة فقط ---
     def build_statement(df):
         if df.empty:
             return pd.DataFrame(columns=["رقم الحجز","اسم الوكيل","اسماء المسافرين","عدد المسافرين","الفندق","عدد الغرف","تاريخ الدخول","تاريخ الخروج","سعر البيع","الملاحظة"])
-
-        # حساب عدد المسافرين
         if 'passenger_count' not in df.columns and 'pax_count' not in df.columns:
             df['pax_count'] = df['passengers'].apply(lambda x: len([l for l in str(x).split('\n') if l.strip()]) if x else 0)
-
         pax_col = 'pax_count' if 'pax_count' in df.columns else 'passenger_count'
         room_col = 'rooms' if 'rooms' in df.columns else ('room_count' if 'room_count' in df.columns else None)
         note_col = 'notes' if 'notes' in df.columns else 'note'
         sell_col = 'sell' if 'sell' in df.columns else 'sell_price'
-
         out = pd.DataFrame()
         out["رقم الحجز"] = df['id'] if 'id' in df.columns else df.index
         out["اسم الوكيل"] = df['company']
@@ -1144,24 +1139,52 @@ with t2:
                 pdf.set_font("Arial", "B", 11)
                 pdf.cell(0, 10, f"Agent Statement - {view_agent}", ln=True, align='C')
                 pdf.ln(2)
-                # هيدر الجدول
                 pdf.set_font("Arial", "B", 6)
                 col_w = 27.5
                 for col_name in df_display.columns:
                     pdf.cell(col_w, 7, col_name.encode('latin-1','ignore').decode('latin-1'), border=1, align='C')
                 pdf.ln()
-                # البيانات
                 pdf.set_font("Arial", "", 6)
                 for _, r in df_display.iterrows():
                     for val in r:
                         pdf.cell(col_w, 6, str(val)[:30].encode('latin-1','ignore').decode('latin-1'), border=1)
                     pdf.ln()
-
                 pdf_buffer = BytesIO()
                 pdf.output(pdf_buffer)
                 st.download_button("📥 تحميل PDF", pdf_buffer.getvalue(), file_name=f"{view_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key="dl_pdf")
             except Exception as e:
                 st.error(f"خطأ PDF: {e}")
+
+    with c3:
+        from io import BytesIO
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_display.to_excel(writer, index=False, sheet_name="Statement")
+        st.download_button("📊 تصدير Excel", output.getvalue(), file_name=f"{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="dl_excel")
+
+    st.dataframe(df_display, use_container_width=True, hide_index=True)
+    st.divider()
+
+    col_pay1, col_pay2 = st.columns([1,2])
+    with col_pay1:
+        st.markdown("#### اضافة دفعة جديدة")
+        conn=sqlite3.connect(DB); agents_list=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]; conn.close()
+        pay_agent = st.selectbox("اختر الوكيل", agents_list, key="pay_agent")
+        pay_date = st.date_input("تاريخ الدفعة", datetime.now(), key="pay_date")
+        pay_amount = st.text_input("المبلغ $", key="pay_amount")
+        pay_note = st.text_input("ملاحظة", key="pay_note", placeholder="تحويل بنكي - كاش...")
+        if st.button("اضافة دفعة", type="primary", use_container_width=True):
+            amt = to_f(pay_amount)
+            if not pay_agent or amt<=0: st.error("اختر وكيل ومبلغ صحيح")
+            else:
+                conn=sqlite3.connect(DB); conn.execute("INSERT INTO agent_payments (agent, pay_date, amount, note) VALUES (?,?,?,?)", (pay_agent, str(pay_date), amt, pay_note)); conn.commit(); conn.close()
+                st.success(f"تم اضافة ${amt} للوكيل {pay_agent}"); st.rerun()
+    with col_pay2:
+        st.markdown("#### ملخص الأرصدة")
+        conn=sqlite3.connect(DB)
+        summary = pd.read_sql("SELECT b.company as Agent, SUM(b.sell) as Total_Sales, (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Total_Paid, SUM(b.sell) - (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Balance FROM bookings b GROUP BY b.company", conn)
+        conn.close()
+        st.dataframe(summary, use_container_width=True, hide_index=True)
 
     with c3:
         from io import BytesIO
