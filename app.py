@@ -1153,26 +1153,23 @@ st.markdown("""
 [data-testid="stDateInput"] input, [data-testid="stTextInput"] input{height:28px !important; min-height:28px !important; padding:0 8px !important; font-size:13px !important;}
 [data-testid="stSelectbox"] label, [data-testid="stDateInput"] label, [data-testid="stTextInput"] label{font-size:11px !important; margin:0 !important; padding:0 !important;}
 [data-testid="stVerticalBlock"]{gap:4px !important;}
-[data-testid="stButton"] button{height:30px !important; min-height:30px !important; font-size:12px !important;}
+[data-testid="stButton"] button{height:30px !important; min-height:30px !important; font-size:12px !important; width:100% !important;}
 </style>
 """, unsafe_allow_html=True)
 
 left_side, right_side = st.columns([1.5, 1], gap="large")
 
 with left_side:
-    # 40% عرض
-    narrow, gap = st.columns([0.40, 0.60])
+    # 50% عرض
+    narrow, gap = st.columns([0.50, 0.50])
     with narrow:
         st.markdown("#### Add New Payment")
         conn=sqlite3.connect(DB)
         agents_list=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]
         conn.close()
 
-        top_b1, top_b2 = st.columns(2, gap="small")
-        with top_b1:
-            pdf_top_holder = st.container()
-        with top_b2:
-            excel_top_holder = st.container()
+        # زرين قد بعض تماما - 1:1
+        top_b1, top_b2 = st.columns([1, 1], gap="small")
 
         pay_agent=st.selectbox("Select Agent",agents_list,key=f"pay_agent_{view_agent}",index=agents_list.index(view_agent) if view_agent in agents_list else 0)
         pay_date=st.date_input("Payment Date",datetime.now(),key=f"pay_date_{view_agent}")
@@ -1180,7 +1177,7 @@ with left_side:
         pay_note=st.text_input("Note",key=f"pay_note_{view_agent}", placeholder="Bank transfer - Cash...")
 
         if pay_agent:
-            with pdf_top_holder:
+            with top_b1:
                 if st.button("🖨️ Print PDF",use_container_width=True,key=f"btn_pdf_add_{pay_agent}"):
                     try:
                         from fpdf import FPDF
@@ -1231,7 +1228,7 @@ with left_side:
                 if f"pdf_data_add_{pay_agent}" in st.session_state:
                     st.download_button("📥 Download PDF",st.session_state[f"pdf_data_add_{pay_agent}"],file_name=f"HOTRIGO_{pay_agent}_statement.pdf",mime="application/pdf",use_container_width=True,key=f"dl_pdf_add_{pay_agent}")
 
-            with excel_top_holder:
+            with top_b2:
                 try:
                     from io import BytesIO
                     output=BytesIO()
