@@ -1248,7 +1248,7 @@ with t3:
                 if st.button("🗑️ Delete", key="delb_h_4col", use_container_width=True):
                     conn=sqlite3.connect(DB); conn.execute("DELETE FROM hotels WHERE name=?", (dh,)); conn.commit(); conn.close(); st.rerun()
 
-        with c3:
+    with c3:
         with st.container(border=True):
             st.markdown("#### ✈️ Airlines")
             nal = st.text_input("Airline", key="nal_4col", placeholder="e.g. Turkish Airlines", label_visibility="collapsed")
