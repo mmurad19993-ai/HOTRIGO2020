@@ -680,17 +680,46 @@ with t1:
         comp=st.text_input("Agent *", key="comp", placeholder="")
         pax_count=st.text_input("Number of Persons", value="1", key="pax_count", placeholder="e.g. 2")
         try:
-            pax_num = int(pax_count) if pax_count.strip()!="" else 1
+        pax_num = int(pax_count) if pax_count.strip()!="" else 1
         except:
-            pax_num = 1
-        pax_num = max(1, min(pax_num, 20))
+        pax_num = 1
+        pax_num = max(1, pax_num)
 
         passenger_list = []
-        for i in range(pax_num):
-            name = st.text_input(f"Passenger {i+1} *", key=f"pas_{i}", placeholder=f"Name {i+1}")
-            passenger_list.append(name)
 
-        pas = "\n".join([n for n in passenger_list if n.strip()!=""])
+        # للكروبات الكبيرة - تحميل اكسل
+        if pax_num > 20:
+            st.warning(f"Group of {pax_num} detected - Please upload Excel")
+            up_file = st.file_uploader("Upload Passenger List Excel", type=["xlsx","xls","csv"], key="up_pas")
+            if up_file is not None:
+                try:
+                    import pandas as pd
+                    if up_file.name.endswith(".csv"):
+                        df = pd.read_csv(up_file)
+                    else:
+                        df = pd.read_excel(up_file)
+                    # ناخد اول عمود فيه الاسماء
+                    col = df.columns[0]
+                    passenger_list = df[col].astype(str).tolist()
+                    st.success(f"Loaded {len(passenger_list)} names from Excel")
+                    for n in passenger_list[:5]:
+                        st.caption(f"- {n}")
+                    if len(passenger_list) > 5:
+                        st.caption(f"... and {len(passenger_list)-5} more")
+                except Exception as e:
+                    st.error(f"Error reading file: {e}")
+            else:
+                st.info("Excel should have one column with passenger names")
+                passenger_list = []
+        else:
+            # للعدد القليل - خانات عادية
+            pax_num = min(pax_num, 20)
+            for i in range(pax_num):
+                name = st.text_input(f"Passenger {i+1} *", key=f"pas_{i}", placeholder=f"Name {i+1}")
+                passenger_list.append(name)
+
+        pas = "\n".join([n for n in passenger_list if str(n).strip()!=""])
+        
         
         room_type=st.text_input("Room Type *", key="room_type", placeholder="SNG - DBL - TRP")
         room_count=st.text_input("Number of Rooms", value="", key="room_count", placeholder="e.g. 1 or leave empty for 0")
