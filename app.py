@@ -1146,10 +1146,10 @@ with t2:
 
     df_display = build_statement(df_raw.copy())
 
-    # ===== الازرار فوق =====
+    # ===== الازرار فوق - نسخة مصححة نهائية =====
     top_btn1, top_btn2 = st.columns(2)
     with top_btn1:
-        if st.button("🖨️ Print PDF", use_container_width=True, key=f"btn_pdf_top_{view_agent}"):
+        if st.button("🖨️ Print PDF", use_container_width=True, key=f"btn_pdf_top_UNIQUE_{view_agent}"):
             try:
                 from fpdf import FPDF
                 from io import BytesIO
@@ -1200,7 +1200,8 @@ with t2:
                 fill=False; total_sell=0
                 for _, row in df_pdf.iterrows():
                     if pdf.get_y()>180: pdf.add_page()
-                    pdf.set_fill_color(232,240,255) if fill else pdf.set_fill_color(255,255,255)
+                    if fill: pdf.set_fill_color(232,240,255)
+                    else: pdf.set_fill_color(255,255,255)
                     try:
                         sell_val=float(str(row['Sell Price']).replace('$','').replace(',','') or 0)
                         total_sell+=sell_val
@@ -1234,7 +1235,8 @@ with t2:
                     fill2=False
                     for _, prow in df_pays_pdf.iterrows():
                         if pdf.get_y()>180: pdf.add_page()
-                        pdf.set_fill_color(232,255,232) if fill2 else pdf.set_fill_color(255,255,255)
+                        if fill2: pdf.set_fill_color(232,255,232)
+                        else: pdf.set_fill_color(255,255,255)
                         pdf.cell(40, 8, str(prow['pay_date']), border=1, align='C', fill=True)
                         pdf.cell(30, 8, f"${float(prow['amount']):.2f}", border=1, align='C', fill=True)
                         pdf.cell(182, 8, str(prow['note'])[:80], border=1, align='L', fill=True)
@@ -1251,83 +1253,6 @@ with t2:
             except Exception as e:
                 st.error(f"PDF Error: {e}")
 
-        top_btn1, top_btn2 = st.columns(2)
-    with top_btn1:
-        if st.button("🖨️ Print PDF", use_container_width=True, key=f"btn_pdf_top_{view_agent}"):
-            try:
-                from fpdf import FPDF
-                from io import BytesIO
-                from datetime import datetime
-                conn=sqlite3.connect(DB)
-                df_pays_pdf = pd.read_sql("SELECT pay_date, amount, note FROM agent_payments WHERE agent=? ORDER BY pay_date", conn, params=(view_agent,))
-                conn.close()
-                class PDF(FPDF):
-                    def header(self):
-                        self.set_font("Arial", "B", 26)
-                        self.set_text_color(13, 71, 161)
-                        self.cell(0, 14, "HOTRIGO", ln=True, align='C')
-                        self.set_font("Arial", "", 10)
-                        self.set_text_color(90,90,90)
-                        self.cell(0, 5, "Travel Management System", ln=True, align='C')
-                        self.ln(2)
-                        self.set_draw_color(13,71,161)
-                        self.set_line_width(0.8)
-                        self.line(10, self.get_y(), 287, self.get_y())
-                        self.ln(6)
-                    def footer(self):
-                        self.set_y(-15)
-                        self.set_font("Arial", "I", 7)
-                        self.set_text_color(150,150,150)
-                        self.cell(0, 10, f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')} | HOTRIGO - {view_agent}", align='C')
-                pdf = PDF(orientation='L', unit='mm', format='A4')
-                pdf.set_auto_page_break(auto=True, margin=20)
-                pdf.add_page()
-                pdf.set_font("Arial", "B", 14)
-                pdf.cell(0, 10, f"Agent Statement - {view_agent}", ln=True, align='C')
-                pdf.ln(4)
-                df_pdf = df_display[["Booking ID","Passenger Names","Pax Count","Hotel","Rooms","Check-in","Check-out","Nights","Sell Price","Note"]].copy()
-                cols = ["Booking ID", "Passenger Names", "Pax", "Hotel", "Rooms", "Check-in", "Check-out", "Nights", "Sell Price", "Note"]
-                col_widths = [22, 55, 10, 40, 12, 22, 22, 12, 22, 35]
-                pdf.set_font("Arial", "B", 8)
-                pdf.set_fill_color(13, 71, 161)
-                pdf.set_text_color(255,255,255)
-                for i, col in enumerate(cols): 
-                    pdf.cell(col_widths[i], 9, col, border=1, align='C', fill=True)
-                pdf.ln()
-                pdf.set_font("Arial", "", 7.5)
-                pdf.set_text_color(30,30,30)
-                fill=False
-                for _, row in df_pdf.iterrows():
-                    if pdf.get_y()>180: pdf.add_page()
-                    if fill: pdf.set_fill_color(232,240,255)
-                    else: pdf.set_fill_color(255,255,255)
-                    vals=[str(row["Booking ID"]), str(row["Passenger Names"])[:45], str(row["Pax Count"]), str(row["Hotel"])[:22], str(row["Rooms"]), str(row["Check-in"]), str(row["Check-out"]), str(row["Nights"]), str(row["Sell Price"])[:15], str(row["Note"])[:25]]
-                    for j,val in enumerate(vals): 
-                        pdf.cell(col_widths[j], 8, val, border=1, align='C', fill=True)
-                    pdf.ln(); fill=not fill
-                if not df_pays_pdf.empty:
-                    pdf.ln(8)
-                    pdf.set_font("Arial", "B", 11)
-                    pdf.set_text_color(13,71,161)
-                    pdf.cell(0, 8, f"Payment History - {view_agent}", ln=True)
-                    pdf.set_font("Arial", "B", 8)
-                    pdf.set_fill_color(0, 150, 64); pdf.set_text_color(255,255,255)
-                    pdf.cell(40, 9, "Date", border=1, align='C', fill=True)
-                    pdf.cell(30, 9, "Amount", border=1, align='C', fill=True)
-                    pdf.cell(182, 9, "Note", border=1, align='C', fill=True)
-                    pdf.ln()
-                    pdf.set_font("Arial", "", 8); pdf.set_text_color(0,0,0)
-                    for _, prow in df_pays_pdf.iterrows():
-                        pdf.cell(40, 8, str(prow['pay_date']), border=1, align='C')
-                        pdf.cell(30, 8, f"${float(prow['amount']):.2f}", border=1, align='C')
-                        pdf.cell(182, 8, str(prow['note'])[:80], border=1, align='L')
-                        pdf.ln()
-                buf = BytesIO()
-                pdf.output(buf)
-                st.download_button("📥 Download PDF", buf.getvalue(), file_name=f"HOTRIGO_{view_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key=f"dl_pdf_final_{view_agent}")
-            except Exception as e:
-                st.error(f"PDF Error: {e}")
-
     with top_btn2:
         from io import BytesIO
         output = BytesIO()
@@ -1337,7 +1262,7 @@ with t2:
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df_display.to_excel(writer, index=False, sheet_name="Bookings")
             df_pays_excel.to_excel(writer, index=False, sheet_name="Payments")
-        st.download_button("📊 Export Excel", output.getvalue(), file_name=f"HOTRIGO_{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_excel_final_{view_agent}")
+        st.download_button("📊 Export Excel", output.getvalue(), file_name=f"HOTRIGO_{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_excel_{view_agent}")
 
     # ===== حجوزات احمد - من الشيت =====
     st.markdown(f"### 📋 حجوزات {view_agent}")
