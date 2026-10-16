@@ -1206,8 +1206,6 @@ with t2:
 
 # ============== T3 - 4 عواميد جنب بعض بنفس السطر ==============
 with t3:
-    st.markdown("### ⚙️ Definitions - تعريف البيانات الأساسية")
-    st.divider()
     conn = sqlite3.connect(DB)
     conn.execute("CREATE TABLE IF NOT EXISTS agents (name TEXT PRIMARY KEY)")
     conn.execute("CREATE TABLE IF NOT EXISTS hotels (name TEXT PRIMARY KEY)")
