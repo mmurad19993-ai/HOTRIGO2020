@@ -736,6 +736,7 @@ with t1:
         sell_s=st.text_input("Selling Price $ *", key="sell")
         pn=to_f(pn_s); fl=to_f(fl_s); tr=to_f(tr_s); sell=to_f(sell_s)
         notes=st.text_input("Note", key="notes")
+        airline=st.text_input("Airline (empty=no flight)", key="airline", placeholder="")
         vno=st.text_input("Voucher No", key="vno")
         try: pax_count_val=int(pax_count)
         except: pax_count_val=1
@@ -751,7 +752,6 @@ with t1:
         c_fno_dep, c_fno_ret = st.columns(2)
         with c_fno_dep: flight_no_dep=st.text_input("Flight No Dep", key="flight_no_dep", placeholder="TK2026")
         with c_fno_ret: flight_no_ret=st.text_input("Flight No Ret", key="flight_no_ret", placeholder="TK2027")
-        airline=st.text_input("Airline (empty=no flight)", key="airline", placeholder="")
         transport_co=st.text_input("Transport Company (empty=no transfer)", key="transport_co", placeholder="")
         if st.button("SAVE SALE", type="primary", use_container_width=True):
             airline_val = airline.strip(); transport_val = transport_co.strip()
