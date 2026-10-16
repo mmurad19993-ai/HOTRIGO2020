@@ -731,7 +731,7 @@ with t1:
         xd=ed+timedelta(days=nights_val)
         st.caption(f"Check-out: {xd}")
         c_small, c_empty = st.columns([0.18, 0.82])
-    with c_small:
+        with c_small:
         pn_s=st.text_input("Price per Night $", key="pn")
         fl_s=st.text_input("Flight $", key="fl")
         tr_s=st.text_input("Transport $", key="tr")
