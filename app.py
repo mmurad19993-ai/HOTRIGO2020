@@ -1248,7 +1248,7 @@ with t3:
         with st.container(border=True):
             st.markdown("#### ✈️ Airlines")
             with st.form(key="f_airlines", clear_on_submit=True):
-                nal = st.text_input("", placeholder="e.g. Turkish Airlines", label_visibility="collapsed")
+                nal = st.text_input("", placeholder="", label_visibility="collapsed")
                 sal = st.form_submit_button("Add Airline", use_container_width=True)
                 if sal and nal.strip():
                     conn=sqlite3.connect(DB)
@@ -1262,7 +1262,7 @@ with t3:
         with st.container(border=True):
             st.markdown("#### 🚌 Transport")
             with st.form(key="f_transport", clear_on_submit=True):
-                nt = st.text_input("", placeholder="e.g. Metro Turizm", label_visibility="collapsed")
+                nt = st.text_input("", placeholder="", label_visibility="collapsed")
                 stf = st.form_submit_button("Add Transport", use_container_width=True)
                 if stf and nt.strip():
                     conn=sqlite3.connect(DB)
