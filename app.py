@@ -466,26 +466,31 @@ def generate_voucher_pdf(data, save_path=None):
     return pdf_bytes
 
 def generate_agent_statement_excel(agent_name, bookings_df, payments_df):
+    import io
     buffer = io.BytesIO()
     try: import openpyxl
-    except: os.system("pip install openpyxl"); import openpyxl
+    except: 
+        import os
+        os.system("pip install openpyxl")
+        import openpyxl
     from datetime import datetime
+    import pandas as pd
 
     def _parse_date(d):
-        if not d: return None
+        if not d or pd.isna(d): return None
         for fmt in ("%Y-%m-%d","%d/%m/%Y","%d-%m-%Y","%Y/%m/%d"):
             try: return datetime.strptime(str(d).strip(), fmt)
             except: pass
         return None
 
     def _first_pax(pas):
-        if not pas: return ""
+        if not pas or pd.isna(pas): return ""
         s = str(pas).replace('\r','\n').strip()
         lines = [x.strip() for x in s.split('\n') if x.strip()]
         return lines[0].split(',')[0].strip() if lines else ""
 
     def _count_pax(pas):
-        if not pas: return 0
+        if not pas or pd.isna(pas): return 0
         s = str(pas).replace('\r','\n').strip()
         lines = [x.strip() for x in s.split('\n') if x.strip()]
         if len(lines) > 1: return len(lines)
@@ -496,7 +501,6 @@ def generate_agent_statement_excel(agent_name, bookings_df, payments_df):
     total_payments = payments_df['amount'].sum() if not payments_df.empty and 'amount' in payments_df.columns else 0
     balance = total_sales - total_payments
 
-    # === الاعمدة الـ 12 يلي طلبتها ===
     data = []
     if not bookings_df.empty:
         for _, r in bookings_df.iterrows():
