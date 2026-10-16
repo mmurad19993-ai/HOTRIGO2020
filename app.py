@@ -1252,63 +1252,109 @@ with t2:
         return None
 
     def generate_pdf_bytes(pay_agent):
-        from fpdf import FPDF
-        from io import BytesIO
-        from datetime import datetime
-        conn=sqlite3.connect(DB)
-        df_pays_pdf=pd.read_sql("SELECT pay_date,amount,note FROM agent_payments WHERE agent=? ORDER BY pay_date",conn,params=(pay_agent,))
-        total_paid_pdf=df_pays_pdf['amount'].sum() if not df_pays_pdf.empty else 0
-        df_raw_for_pdf = pd.read_sql("SELECT * FROM bookings WHERE company=?", conn, params=(pay_agent,))
-        conn.close()
-        if df_raw_for_pdf.empty: return None
-        sell_c=None
-        for c in df_raw_for_pdf.columns:
-            if 'sell' in c.lower() or 'price' in c.lower(): sell_c=c; break
-        total_sell = df_raw_for_pdf[sell_c].apply(to_f_local).sum() if sell_c else 0
-        col_traveler = get_col(df_raw_for_pdf,'traveler','guest','passenger','pax_name','names')
-        col_pax = get_col(df_raw_for_pdf,'pax','persons','people','adult')
-        col_hotel = get_col(df_raw_for_pdf,'hotel')
-        col_room_type = get_col(df_raw_for_pdf,'room_type','room')
-        col_room_count = get_col(df_raw_for_pdf,'room_count','rooms')
-        col_checkin = get_col(df_raw_for_pdf,'checkin','check_in','arrival')
-        col_nights = get_col(df_raw_for_pdf,'nights','night')
-        col_checkout = get_col(df_raw_for_pdf,'checkout','check_out','departure')
-        col_note = get_col(df_raw_for_pdf,'note','remark')
-        class PDF(FPDF):
-            def header(self):
-                self.set_font("Arial","B",26);self.set_text_color(13,71,161);self.cell(0,14,"HOTRIGO",ln=True,align='C')
-                self.ln(2);self.set_draw_color(13,71,161);self.set_line_width(0.8);self.line(10,self.get_y(),287,self.get_y());self.ln(6)
-            def footer(self):
-                self.set_y(-15);self.set_font("Arial","I",7);self.set_text_color(150,150,150);self.cell(0,10,f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')} | HOTRIGO - {pay_agent}",align='C')
-        pdf=PDF(orientation='L',unit='mm',format='A4');pdf.set_auto_page_break(auto=True,margin=20);pdf.add_page()
-        pdf.set_font("Arial","B",14);pdf.cell(0,10,f"Agent Statement - {pay_agent}",ln=True,align='C');pdf.ln(4)
-        pdf.set_font("Arial","B",9);pdf.set_fill_color(13,71,161);pdf.set_text_color(255,255,255)
-        pdf.cell(0,10,f"Total Sales: ${total_sell:.2f} | Paid: ${total_paid_pdf:.2f} | Balance: ${total_sell-total_paid_pdf:.2f}",border=1,align='C',fill=True);pdf.ln(12)
-        pdf.set_font("Arial","B",11);pdf.set_text_color(13,71,161);pdf.cell(0,8,f"Bookings - {pay_agent}",ln=True);pdf.ln(2)
-        headers = ["Agent","Traveler","Pax","Hotel","Room Type","Rooms","Check-in","Nights","Check-out","Sale Price","Note"]
-        widths  = [22, 28, 10, 32, 22, 12, 20, 12, 20, 20, 79]
-        pdf.set_font("Arial","B",7);pdf.set_fill_color(13,71,161);pdf.set_text_color(255,255,255)
-        for h,w in zip(headers,widths): pdf.cell(w,8,h,border=1,align='C',fill=True)
-        pdf.ln()
-        pdf.set_font("Arial","",6.5);pdf.set_text_color(0,0,0)
-        for _, row in df_raw_for_pdf.iterrows():
-            if pdf.get_y()>175: pdf.add_page()
-            vals = [str(pay_agent)[:12],first_traveler_only(row.get(col_traveler,"") if col_traveler else ""),str(row.get(col_pax,"") if col_pax else ""),str(row.get(col_hotel,"") if col_hotel else "")[:18],str(row.get(col_room_type,"") if col_room_type else "")[:12],str(row.get(col_room_count,"") if col_room_count else ""),str(row.get(col_checkin,"") if col_checkin else "")[:10],str(row.get(col_nights,"") if col_nights else ""),str(row.get(col_checkout,"") if col_checkout else "")[:10],f"${to_f_local(row.get(sell_c,0)):.0f}" if sell_c else "",str(row.get(col_note,"") if col_note else "")[:50]]
-            for v,w in zip(vals,widths): pdf.cell(w,7,v,border=1,align='C')
-            pdf.ln()
-        pdf.ln(8)
-        if not df_pays_pdf.empty:
-            if pdf.get_y()>160: pdf.add_page()
-            pdf.set_font("Arial","B",11);pdf.set_text_color(13,71,161);pdf.cell(0,8,f"Payment History - {pay_agent}",ln=True);pdf.ln(1)
-            pdf.set_font("Arial","B",8);pdf.set_fill_color(0,150,64);pdf.set_text_color(255,255,255)
-            pdf.cell(40,9,"Date",border=1,align='C',fill=True);pdf.cell(30,9,"Amount",border=1,align='C',fill=True);pdf.cell(207,9,"Note",border=1,align='C',fill=True);pdf.ln()
-            pdf.set_font("Arial","",8);pdf.set_text_color(0,0,0)
-            for _,prow in df_pays_pdf.iterrows():
-                if pdf.get_y()>180:pdf.add_page()
-                pdf.cell(40,8,str(prow['pay_date']),border=1,align='C');pdf.cell(30,8,f"${float(prow['amount']):.2f}",border=1,align='C');pdf.cell(207,8,str(prow['note'])[:95],border=1,align='L');pdf.ln()
-        buf=BytesIO(); pdf.output(buf); return buf.getvalue()
+    from fpdf import FPDF
+    from io import BytesIO
+    from datetime import datetime
+    conn = sqlite3.connect(DB)
+    df_pays_pdf = pd.read_sql("SELECT pay_date,amount,note FROM agent_payments WHERE agent=? ORDER BY pay_date", conn, params=(pay_agent,))
+    total_paid_pdf = df_pays_pdf['amount'].sum() if not df_pays_pdf.empty else 0
+    df_raw_for_pdf = pd.read_sql("SELECT * FROM bookings WHERE company=?", conn, params=(pay_agent,))
+    conn.close()
+    if df_raw_for_pdf.empty:
+        return None
+    sell_c = None
+    for c in df_raw_for_pdf.columns:
+        if 'sell' in c.lower() or 'price' in c.lower():
+            sell_c = c
+            break
+    total_sell = df_raw_for_pdf[sell_c].apply(to_f_local).sum() if sell_c else 0
+    col_traveler = get_col(df_raw_for_pdf, 'traveler', 'guest', 'passenger', 'pax_name', 'names')
+    col_pax = get_col(df_raw_for_pdf, 'pax', 'persons', 'people', 'adult')
+    col_hotel = get_col(df_raw_for_pdf, 'hotel')
+    col_room_type = get_col(df_raw_for_pdf, 'room_type', 'room')
+    col_room_count = get_col(df_raw_for_pdf, 'room_count', 'rooms')
+    col_checkin = get_col(df_raw_for_pdf, 'checkin', 'check_in', 'arrival')
+    col_nights = get_col(df_raw_for_pdf, 'nights', 'night')
+    col_checkout = get_col(df_raw_for_pdf, 'checkout', 'check_out', 'departure')
+    col_note = get_col(df_raw_for_pdf, 'note', 'remark')
 
-    def generate_excel_bytes(pay_agent):
+    class PDF(FPDF):
+        def header(self):
+            self.set_font("Arial", "B", 26)
+            self.set_text_color(13, 71, 161)
+            self.cell(0, 14, "HOTRIGO", ln=True, align='C')
+            self.ln(2)
+            self.set_draw_color(13, 71, 161)
+            self.set_line_width(0.8)
+            self.line(10, self.get_y(), 287, self.get_y())
+            self.ln(6)
+        def footer(self):
+            self.set_y(-15)
+            self.set_font("Arial", "I", 7)
+            self.set_text_color(150, 150, 150)
+            self.cell(0, 10, f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')} | HOTRIGO - {pay_agent}", align='C')
+
+    pdf = PDF(orientation='L', unit='mm', format='A4')
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, f"Agent Statement - {pay_agent}", ln=True, align='C')
+    pdf.ln(4)
+    pdf.set_font("Arial", "B", 9)
+    pdf.set_fill_color(13, 71, 161)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 10, f"Total Sales: ${total_sell:.2f} | Paid: ${total_paid_pdf:.2f} | Balance: ${total_sell-total_paid_pdf:.2f}", border=1, align='C', fill=True)
+    pdf.ln(12)
+    pdf.set_font("Arial", "B", 11)
+    pdf.set_text_color(13, 71, 161)
+    pdf.cell(0, 8, f"Bookings - {pay_agent}", ln=True)
+    pdf.ln(2)
+    headers = ["Agent", "Traveler", "Pax", "Hotel", "Room Type", "Rooms", "Check-in", "Nights", "Check-out", "Sale Price", "Note"]
+    widths = [22, 28, 10, 32, 22, 12, 20, 12, 20, 20, 79]
+    pdf.set_font("Arial", "B", 7)
+    pdf.set_fill_color(13, 71, 161)
+    pdf.set_text_color(255, 255, 255)
+    for h, w in zip(headers, widths):
+        pdf.cell(w, 8, h, border=1, align='C', fill=True)
+    pdf.ln()
+    pdf.set_font("Arial", "", 6.5)
+    pdf.set_text_color(0, 0, 0)
+    for _, row in df_raw_for_pdf.iterrows():
+        if pdf.get_y() > 175:
+            pdf.add_page()
+        vals = [str(pay_agent)[:12], first_traveler_only(row.get(col_traveler, "") if col_traveler else ""), str(row.get(col_pax, "") if col_pax else ""), str(row.get(col_hotel, "") if col_hotel else "")[:18], str(row.get(col_room_type, "") if col_room_type else "")[:12], str(row.get(col_room_count, "") if col_room_count else ""), str(row.get(col_checkin, "") if col_checkin else "")[:10], str(row.get(col_nights, "") if col_nights else ""), str(row.get(col_checkout, "") if col_checkout else "")[:10], f"${to_f_local(row.get(sell_c,0)):.0f}" if sell_c else "", str(row.get(col_note, "") if col_note else "")[:50]]
+        for v, w in zip(vals, widths):
+            pdf.cell(w, 7, v, border=1, align='C')
+        pdf.ln()
+    pdf.ln(8)
+    if not df_pays_pdf.empty:
+        if pdf.get_y() > 160:
+            pdf.add_page()
+        pdf.set_font("Arial", "B", 11)
+        pdf.set_text_color(13, 71, 161)
+        pdf.cell(0, 8, f"Payment History - {pay_agent}", ln=True)
+        pdf.ln(1)
+        pdf.set_font("Arial", "B", 8)
+        pdf.set_fill_color(0, 150, 64)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(40, 9, "Date", border=1, align='C', fill=True)
+        pdf.cell(30, 9, "Amount", border=1, align='C', fill=True)
+        pdf.cell(207, 9, "Note", border=1, align='C', fill=True)
+        pdf.ln()
+        pdf.set_font("Arial", "", 8)
+        pdf.set_text_color(0, 0, 0)
+        for _, prow in df_pays_pdf.iterrows():
+            if pdf.get_y() > 180:
+                pdf.add_page()
+            pdf.cell(40, 8, str(prow['pay_date']), border=1, align='C')
+            pdf.cell(30, 8, f"${float(prow['amount']):.2f}", border=1, align='C')
+            pdf.cell(207, 8, str(prow['note'])[:95], border=1, align='L')
+            pdf.ln()
+    buf = BytesIO()
+    pdf.output(buf)
+    return buf.getvalue()
+
+def generate_excel_bytes(pay_agent):
     from io import BytesIO
     from datetime import datetime
     import pandas as pd
@@ -1372,11 +1418,7 @@ with t2:
     if not df2.empty:
         cols = [c for c in ['pay_date', 'amount', 'note'] if c in df2.columns]
         pay_export = df2[cols].copy()
-        pay_export.rename(columns={
-            'pay_date': 'Payment Date',
-            'amount': 'Amount',
-            'note': 'Payment Note'
-        }, inplace=True)
+        pay_export.rename(columns={'pay_date': 'Payment Date', 'amount': 'Amount', 'note': 'Payment Note'}, inplace=True)
     else:
         pay_export = pd.DataFrame([{'Note': 'No payments'}])
 
@@ -1443,26 +1485,12 @@ with left_side:
         b1, b2 = st.columns(2, gap="small")
         with b1:
             if pdf_bytes:
-                st.download_button(
-                    "🖨️ Print PDF",
-                    data=pdf_bytes,
-                    file_name=f"HOTRIGO_{pay_agent}_statement.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                    key=f"dl_pdf_one_{pay_agent}"
-                )
+                st.download_button("🖨️ Print PDF", data=pdf_bytes, file_name=f"HOTRIGO_{pay_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key=f"dl_pdf_one_{pay_agent}")
             else:
                 st.button("🖨️ Print PDF", disabled=True, use_container_width=True, key=f"dis_pdf_{pay_agent}")
         with b2:
             if excel_bytes:
-                st.download_button(
-                    "📊 Export Excel",
-                    data=excel_bytes,
-                    file_name=f"HOTRIGO_{pay_agent}_statement.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                    key=f"dl_excel_one_{pay_agent}"
-                )
+                st.download_button("📊 Export Excel", data=excel_bytes, file_name=f"HOTRIGO_{pay_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_excel_one_{pay_agent}")
     with right_side:
         # === فوق : Agents Summary ===
         st.markdown("#### 💰 Agents Summary")
