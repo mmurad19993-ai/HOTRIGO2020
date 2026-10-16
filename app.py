@@ -731,6 +731,28 @@ with t1:
         xd=ed+timedelta(days=nights_val)
         st.caption(f"Check-out: {xd}")
 
+        # --- هون صاروا كبار - شلت c_small ---
+        c_price, c_flight = st.columns(2)
+        with c_price: pn_s=st.text_input("Price per Night $", key="pn")
+        with c_flight: fl_s=st.text_input("Flight $", key="fl")
+
+        c_trans, c_sell = st.columns(2)
+        with c_trans: tr_s=st.text_input("Transport $", key="tr")
+        with c_sell: sell_s=st.text_input("Selling Price $ *", key="sell")
+
+        pn=to_f(pn_s); fl=to_f(fl_s); tr=to_f(tr_s); sell=to_f(sell_s)
+
+        try: room_count_val=int(room_count) if room_count.strip()!="" else 0
+        except: room_count_val=0
+        rc_for_calc = room_count_val if room_count_val > 0 else 1
+        cost_total = (pn * nights_val * rc_for_calc) + fl + tr
+        if cost_total > 0:
+            st.caption(f"💰 الكوست صار علينا: ${cost_total:,.2f}")
+
+        notes=st.text_input("Note", key="notes")
+        airline=st.text_input("Airline (empty=no flight)", key="airline", placeholder="")
+        vno=st.text_input("Voucher No", key="vno")
+
         with st.expander("➕ Show More / باقي المعلومات - المزيد", expanded=False):
             c_dep, c_ret=st.columns(2)
             with c_dep: dep_time=st.text_input("Departure Time", key="dep_time", placeholder="10:30")
@@ -742,15 +764,6 @@ with t1:
             with c_air_dep: dep_airport=st.text_input("Departure Airport", key="dep_airport", placeholder="IST")
             with c_air_ret: ret_airport=st.text_input("Return Airport", key="ret_airport", placeholder="BEY")
             transport_co=st.text_input("Transport Company (empty=no transfer)", key="transport_co", placeholder="")
-
-        # --- هون صاروا كبار - شلت c_small ---
-        c_price, c_flight = st.columns(2)
-        with c_price: pn_s=st.text_input("Price per Night $", key="pn")
-        with c_flight: fl_s=st.text_input("Flight $", key="fl")
-
-        c_trans, c_sell = st.columns(2)
-        with c_trans: tr_s=st.text_input("Transport $", key="tr")
-        with c_sell: sell_s=st.text_input("Selling Price $ *", key="sell")
 
         pn=to_f(pn_s); fl=to_f(fl_s); tr=to_f(tr_s); sell=to_f(sell_s)
 
