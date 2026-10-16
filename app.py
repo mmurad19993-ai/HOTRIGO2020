@@ -1091,8 +1091,6 @@ if view_btn:
             view_dialog()
 with t2:
     st.markdown("## 💰 كشف حساب الوكلاء")
-
-    # --- عرض كشف وكيل + طباعة + تصدير ---
     st.markdown("#### 🔍 عرض كشف وكيل")
     c1, c2, c3 = st.columns([3, 1, 1])
 
@@ -1104,8 +1102,37 @@ with t2:
         view_agent = st.selectbox("اختر الوكيل", all_companies, key="view_agent", placeholder="اختر الوكيل...")
 
     conn=sqlite3.connect(DB)
-    df_agent = pd.read_sql("SELECT * FROM bookings WHERE company=? ORDER BY entry_date DESC", conn, params=(view_agent,))
+    df_raw = pd.read_sql("SELECT * FROM bookings WHERE company=? ORDER BY entry_date DESC", conn, params=(view_agent,))
     conn.close()
+
+    # --- تجهيز الكشف بالاعمدة المطلوبة فقط ---
+    def build_statement(df):
+        if df.empty:
+            return pd.DataFrame(columns=["رقم الحجز","اسم الوكيل","اسماء المسافرين","عدد المسافرين","الفندق","عدد الغرف","تاريخ الدخول","تاريخ الخروج","سعر البيع","الملاحظة"])
+
+        # حساب عدد المسافرين
+        if 'passenger_count' not in df.columns and 'pax_count' not in df.columns:
+            df['pax_count'] = df['passengers'].apply(lambda x: len([l for l in str(x).split('\n') if l.strip()]) if x else 0)
+
+        pax_col = 'pax_count' if 'pax_count' in df.columns else 'passenger_count'
+        room_col = 'rooms' if 'rooms' in df.columns else ('room_count' if 'room_count' in df.columns else None)
+        note_col = 'notes' if 'notes' in df.columns else 'note'
+        sell_col = 'sell' if 'sell' in df.columns else 'sell_price'
+
+        out = pd.DataFrame()
+        out["رقم الحجز"] = df['id'] if 'id' in df.columns else df.index
+        out["اسم الوكيل"] = df['company']
+        out["اسماء المسافرين"] = df['passengers']
+        out["عدد المسافرين"] = df[pax_col] if pax_col in df.columns else 1
+        out["الفندق"] = df['hotel'] if 'hotel' in df.columns else ""
+        out["عدد الغرف"] = df[room_col] if room_col and room_col in df.columns else 1
+        out["تاريخ الدخول"] = df['entry_date'] if 'entry_date' in df.columns else ""
+        out["تاريخ الخروج"] = df['exit_date'] if 'exit_date' in df.columns else ""
+        out["سعر البيع"] = df[sell_col] if sell_col in df.columns else 0
+        out["الملاحظة"] = df[note_col] if note_col in df.columns else ""
+        return out
+
+    df_display = build_statement(df_raw.copy())
 
     with c2:
         if st.button("🖨️ طباعة PDF", use_container_width=True, key="btn_pdf"):
@@ -1114,23 +1141,36 @@ with t2:
                 from io import BytesIO
                 pdf = FPDF(orientation='L', unit='mm', format='A4')
                 pdf.add_page()
-                pdf.set_font("Arial", "B", 12)
+                pdf.set_font("Arial", "B", 11)
                 pdf.cell(0, 10, f"Agent Statement - {view_agent}", ln=True, align='C')
-                pdf.ln(5)
-                pdf.set_font("Arial", "", 8)
-                # هيدر مبسط
-                for _, r in df_agent.iterrows():
-                    txt = f"{r.get('entry_date','')} | {r.get('hotel','')} | {r.get('passengers','')} | {r.get('sell','')} | {r.get('notes','') or r.get('note','')}"
-                    pdf.cell(0, 6, txt[:180], ln=True, border=1)
+                pdf.ln(2)
+                # هيدر الجدول
+                pdf.set_font("Arial", "B", 6)
+                col_w = 27.5
+                for col_name in df_display.columns:
+                    pdf.cell(col_w, 7, col_name.encode('latin-1','ignore').decode('latin-1'), border=1, align='C')
+                pdf.ln()
+                # البيانات
+                pdf.set_font("Arial", "", 6)
+                for _, r in df_display.iterrows():
+                    for val in r:
+                        pdf.cell(col_w, 6, str(val)[:30].encode('latin-1','ignore').decode('latin-1'), border=1)
+                    pdf.ln()
 
-                # --- هذا هو التصليح المهم ---
                 pdf_buffer = BytesIO()
                 pdf.output(pdf_buffer)
-                pdf_bytes = pdf_buffer.getvalue()
-
-                st.download_button("📥 تحميل PDF", pdf_bytes, file_name=f"{view_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key="dl_pdf")
+                st.download_button("📥 تحميل PDF", pdf_buffer.getvalue(), file_name=f"{view_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key="dl_pdf")
             except Exception as e:
                 st.error(f"خطأ PDF: {e}")
+
+    with c3:
+        from io import BytesIO
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_display.to_excel(writer, index=False, sheet_name="Statement")
+        st.download_button("📊 تصدير Excel", output.getvalue(), file_name=f"{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="dl_excel")
+
+    st.dataframe(df_display, use_container_width=True, hide_index=True)
 
     with c3:
         from io import BytesIO
