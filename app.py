@@ -1051,11 +1051,11 @@ if view_btn:
                     st.markdown(f"**Note:** {d.get('notes','')}")
                 with c2:
                     st.markdown(f"**Check-in:** {d.get('entry_date','')}")
-                    st.markdown(f"**Check-out:** {d.get('exit_date','')}")
-                    st.divider()
-                    st.markdown(f"**Departure:** {d.get('flight_dep_time','')} Airport {d.get('dep_airport','')}")
+                    st.markdown(f"**Departure:** {d.get('flight_dep_time','')} {d.get('dep_airport','')}")
                     st.markdown(f"Flight No: **{d.get('flight_no_dep','')}**")
-                    st.markdown(f"**Return:** {d.get('flight_ret_time','')} Airport {d.get('ret_airport','')}")
+                    st.markdown("---")
+                    st.markdown(f"**Check-out:** {d.get('exit_date','')}")
+                    st.markdown(f"**Return:** {d.get('flight_ret_time','')} {d.get('ret_airport','')}")
                     st.markdown(f"Flight No: **{d.get('flight_no_ret','')}**")
             view_dialog()
 with t2:
