@@ -1147,24 +1147,35 @@ with t2:
         df_display = build_statement(df_raw.copy())
 st.divider()
 
-st.markdown("<style>div[data-testid='stVerticalBlock']{gap:0.4rem !important} .stTextInput input,.stDateInput input{height:32px !important}</style>", unsafe_allow_html=True)
-
 # ===== تقسيم طرفين =====
 left_side, right_side = st.columns([1.5, 1], gap="large")
 
-# ========== الطرف اليسار - فورم الدفع ==========
+# ========== يسار - Add New Payment ==========
 with left_side:
     st.markdown("#### Add New Payment")
     conn=sqlite3.connect(DB)
     agents_list=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]
     conn.close()
 
-    r1_c1,r1_c2,r1_c3=st.columns([2,1,1], gap="small")
-    with r1_c1:
-        pay_agent=st.selectbox("Agent",agents_list,key=f"pay_agent_{view_agent}",index=agents_list.index(view_agent) if view_agent in agents_list else 0,label_visibility="collapsed")
+    # 1- الزرين فوق - قبل اسم الوكيل
+    top_b1, top_b2 = st.columns(2, gap="small")
+    # هنعبيهن بعد ما نعرف pay_agent - بس نحجز مكانن هون فوق
+    with top_b1:
+        pdf_top_holder = st.container()
+    with top_b2:
+        excel_top_holder = st.container()
+
+    # 2- اسم الوكيل
+    pay_agent=st.selectbox("Select Agent",agents_list,key=f"pay_agent_{view_agent}",index=agents_list.index(view_agent) if view_agent in agents_list else 0)
+
+    # 3- الحقول تحت بعض - عمودي
+    pay_date=st.date_input("Payment Date",datetime.now(),key=f"pay_date_{view_agent}")
+    pay_amount=st.text_input("Amount $",key=f"pay_amount_{view_agent}", placeholder="$ Amount")
+    pay_note=st.text_input("Note",key=f"pay_note_{view_agent}", placeholder="Bank transfer - Cash...")
 
     if pay_agent:
-        with r1_c2:
+        # عبي الزرين الفوقانيين
+        with pdf_top_holder:
             if st.button("🖨️ Print PDF",use_container_width=True,key=f"btn_pdf_add_{pay_agent}"):
                 try:
                     from fpdf import FPDF
@@ -1183,11 +1194,7 @@ with left_side:
                             self.set_y(-15);self.set_font("Arial","I",7);self.set_text_color(150,150,150);self.cell(0,10,f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')} | HOTRIGO - {pay_agent}",align='C')
                     pdf=PDF(orientation='L',unit='mm',format='A4');pdf.set_auto_page_break(auto=True,margin=20);pdf.add_page()
                     pdf.set_font("Arial","B",14);pdf.cell(0,10,f"Agent Statement - {pay_agent}",ln=True,align='C');pdf.ln(4)
-                    if pay_agent!=view_agent:
-                        conn=sqlite3.connect(DB);df_raw_pay=pd.read_sql("SELECT * FROM bookings WHERE company=?",conn,params=(pay_agent,));conn.close()
-                        df_pdf_source=build_statement(df_raw_pay.copy()) if not df_raw_pay.empty else df_display
-                    else:
-                        df_pdf_source=df_display
+                    df_pdf_source=df_display if pay_agent==view_agent else build_statement(pd.read_sql("SELECT * FROM bookings WHERE company=?",sqlite3.connect(DB),params=(pay_agent,)).copy()) if not pd.read_sql("SELECT * FROM bookings WHERE company=?",sqlite3.connect(DB),params=(pay_agent,)).empty else df_display
                     df_pdf=df_pdf_source[["Booking ID","Passenger Names","Pax Count","Hotel","Rooms","Check-in","Check-out","Nights","Sell Price","Note"]].copy()
                     cols=["Booking ID","Passenger Names","Pax","Hotel","Rooms","Check-in","Check-out","Nights","Sell Price","Note"];col_widths=[22,55,10,40,12,22,22,12,22,35]
                     pdf.set_font("Arial","B",8);pdf.set_fill_color(13,71,161);pdf.set_text_color(255,255,255)
@@ -1219,7 +1226,7 @@ with left_side:
             if f"pdf_data_add_{pay_agent}" in st.session_state:
                 st.download_button("📥 Download PDF",st.session_state[f"pdf_data_add_{pay_agent}"],file_name=f"HOTRIGO_{pay_agent}_statement.pdf",mime="application/pdf",use_container_width=True,key=f"dl_pdf_add_{pay_agent}")
 
-        with r1_c3:
+        with excel_top_holder:
             try:
                 from io import BytesIO
                 output=BytesIO()
@@ -1235,14 +1242,7 @@ with left_side:
             except Exception as e:
                 st.error(f"Excel Error: {e}")
 
-    c_date,c_amt,c_note=st.columns([1,1,2], gap="small")
-    with c_date:
-        pay_date=st.date_input("Date",datetime.now(),key=f"pay_date_{view_agent}",label_visibility="collapsed")
-    with c_amt:
-        pay_amount=st.text_input("Amount",key=f"pay_amount_{view_agent}",placeholder="$ Amount",label_visibility="collapsed")
-    with c_note:
-        pay_note=st.text_input("Note",key=f"pay_note_{view_agent}",placeholder="Bank transfer - Cash...",label_visibility="collapsed")
-
+    # زر الإضافة
     if st.button("Add Payment",type="primary",use_container_width=True,key=f"btn_add_pay_{pay_agent}"):
         amt=to_f(pay_amount)
         if not pay_agent or amt<=0:
@@ -1254,7 +1254,7 @@ with left_side:
             if f"pdf_data_add_{pay_agent}" in st.session_state: del st.session_state[f"pdf_data_add_{pay_agent}"]
             st.success(f"Added ${amt} for agent {pay_agent}");st.rerun()
 
-# ========== الطرف اليمين - ملخص كل الوكلاء ==========
+# ========== يمين - ملخص الوكلاء ==========
 with right_side:
     st.markdown("#### 💰 Agents Summary")
     try:
@@ -1262,12 +1262,8 @@ with right_side:
         df_all_bookings=pd.read_sql("SELECT * FROM bookings",conn)
         df_all_pays=pd.read_sql("SELECT agent, SUM(amount) as total_paid FROM agent_payments GROUP BY agent",conn)
         conn.close()
-        conn=sqlite3.connect(DB)
-        agents_list_summary=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]
-        conn.close()
-        
         summary=[]
-        for ag in agents_list_summary:
+        for ag in agents_list:
             df_ag = df_all_bookings[df_all_bookings['company']==ag] if not df_all_bookings.empty else pd.DataFrame()
             total_sales=0
             if not df_ag.empty:
@@ -1278,12 +1274,11 @@ with right_side:
             paid_row = df_all_pays[df_all_pays['agent']==ag] if not df_all_pays.empty else pd.DataFrame()
             total_paid = float(paid_row['total_paid'].values[0]) if not paid_row.empty else 0
             summary.append({"Agent":ag, "Sales":total_sales, "Paid":total_paid, "Balance":total_sales-total_paid})
-        
         df_summary=pd.DataFrame(summary)
         if not df_summary.empty:
-            st.dataframe(df_summary.style.format({"Sales":"${:.2f}","Paid":"${:.2f}","Balance":"${:.2f}"}), use_container_width=True, height=380)
+            st.dataframe(df_summary.style.format({"Sales":"${:.2f}","Paid":"${:.2f}","Balance":"${:.2f}"}), use_container_width=True, height=420)
             st.markdown(f"""<div style="background:#0d47a1;color:white;padding:10px;border-radius:8px;text-align:center">
-            <b>Sales:</b> ${df_summary['Sales'].sum():.2f} | <b>Paid:</b> ${df_summary['Paid'].sum():.2f} | <b>Due:</b> ${df_summary['Balance'].sum():.2f}
+            Sales: ${df_summary['Sales'].sum():.2f} | Paid: ${df_summary['Paid'].sum():.2f} | Due: ${df_summary['Balance'].sum():.2f}
             </div>""", unsafe_allow_html=True)
     except Exception as e:
         st.error(f"Summary Error: {e}")
