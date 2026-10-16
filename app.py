@@ -735,6 +735,8 @@ with t1:
         tr_s=st.text_input("Transport $", key="tr")
         sell_s=st.text_input("Selling Price $ *", key="sell")
         pn=to_f(pn_s); fl=to_f(fl_s); tr=to_f(tr_s); sell=to_f(sell_s)
+        notes=st.text_input("Note", key="notes")
+        vno=st.text_input("Voucher No", key="vno")
         try: pax_count_val=int(pax_count)
         except: pax_count_val=1
         try: room_count_val=int(room_count) if room_count.strip()!="" else 0
@@ -751,8 +753,6 @@ with t1:
         with c_fno_ret: flight_no_ret=st.text_input("Flight No Ret", key="flight_no_ret", placeholder="TK2027")
         airline=st.text_input("Airline (empty=no flight)", key="airline", placeholder="")
         transport_co=st.text_input("Transport Company (empty=no transfer)", key="transport_co", placeholder="")
-        notes=st.text_input("Note", key="notes")
-        vno=st.text_input("Voucher No", key="vno")
         if st.button("SAVE SALE", type="primary", use_container_width=True):
             airline_val = airline.strip(); transport_val = transport_co.strip()
             comp_full, comp_ok = smart_match(comp, agents_for_js, agents_upper)
