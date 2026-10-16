@@ -743,6 +743,7 @@ with t1:
         cost_total = (pn * nights_val * rc_for_calc) + fl + tr
         if cost_total > 0:
             st.caption(f"💰 الكوست صار علينا: ${cost_total:,.2f}")
+        with st.expander("➕ Show More / المزيد - باقي المعلومات", expanded=False):
             notes=st.text_input("Note", key="notes")
             airline=st.text_input("Airline (empty=no flight)", key="airline", placeholder="")
             vno=st.text_input("Voucher No", key="vno")
