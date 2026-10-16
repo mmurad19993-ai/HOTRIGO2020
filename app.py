@@ -730,50 +730,6 @@ with t1:
         except: nights_val=0
         xd=ed+timedelta(days=nights_val)
         st.caption(f"Check-out: {xd}")
-        components.html("""
-        <script>
-        const doc = window.parent.document;
-        doc.addEventListener('keydown', function(e) {
-          if (e.key === 'Enter' && doc.activeElement.tagName === 'INPUT') {
-            e.preventDefault();
-            const inputs = Array.from(doc.querySelectorAll('input'));
-            const idx = inputs.indexOf(doc.activeElement);
-            if (idx > -1 && inputs[idx+1]) inputs[idx+1].focus();
-          }
-        });
-        </script>
-        """, height=0)
-        c_small, c_empty = st.columns([0.4, 0.6])
-        with c_small:
-            pn_s=st.text_input("Price per Night $", key="pn")
-            fl_s=st.text_input("Flight $", key="fl")
-            tr_s=st.text_input("Transport $", key="tr")
-            sell_s=st.text_input("Selling Price $ *", key="sell")
-            pn=to_f(pn_s); fl=to_f(fl_s); tr=to_f(tr_s); sell=to_f(sell_s)
-            try: pax_count_val=int(pax_count)
-            except: pax_count_val=1
-            try: room_count_val=int(room_count) if room_count.strip()!="" else 0
-            except: room_count_val=0
-            rc_for_calc = room_count_val if room_count_val > 0 else 1
-            cost_total = (pn * nights_val * rc_for_calc) + fl + tr
-            if cost_total > 0:
-                st.caption(f"💰 الكوست صار علينا: ${cost_total:,.2f}")
-            notes=st.text_input("Note", key="notes")
-            airline=st.text_input("Airline (empty=no flight)", key="airline", placeholder="")
-            vno=st.text_input("Voucher No", key="vno")
-            if st.button("SAVE SALE", type="primary", use_container_width=True):
-                airline_val = airline.strip(); transport_val = transport_co.strip()
-                comp_full, comp_ok = smart_match(comp, agents_for_js, agents_upper)
-                hotel_full, hotel_ok = smart_match(hotel, hotels_for_js, hotels_upper)
-                is_no_flight = airline_val == "" or airline_val == "0"
-                is_no_transport = transport_val == "" or transport_val == "0"
-                airline_full, airline_ok = ("", True) if is_no_flight else smart_match(airline_val, airlines_for_js, airlines_upper)
-                transport_full, transport_ok = ("", True) if is_no_transport else smart_match(transport_val, transport_for_js, transport_upper)
-                if not comp.strip() or not hotel.strip() or not emp.strip() or not pas.strip(): st.error("Fill required")
-                elif not comp_ok: st.error(f"❌ Agent '{comp}' not found!")
-                elif not hotel_ok: st.error(f"❌ Hotel '{hotel}' not found!")
-                elif not airline_ok: st.error(f"❌ Airline '{airline}' not found!")
-                elif not transport_ok: st.error(f"❌ Transport '{transport_co}' not found!")
 
         with st.expander("➕ Show More / باقي المعلومات - المزيد", expanded=False):
             c_dep, c_ret=st.columns(2)
@@ -787,21 +743,53 @@ with t1:
             with c_air_ret: ret_airport=st.text_input("Return Airport", key="ret_airport", placeholder="BEY")
             transport_co=st.text_input("Transport Company (empty=no transfer)", key="transport_co", placeholder="")
 
-        if st.button("➕ Add / أضف", use_container_width=True, key="add_btn"):
-            airline_val=st.session_state.get("airline_pick","")
-            airline_full=airline_map.get(airline_val, airline_val)
-            transport_full=transport_map.get(transport_co.strip(), transport_co.strip())
-            if not comp_full or not pas.strip() or not hotel_full:
-                st.error("Please fill Company, Passengers, Hotel")
+        # --- هون صاروا كبار - شلت c_small ---
+        c_price, c_flight = st.columns(2)
+        with c_price: pn_s=st.text_input("Price per Night $", key="pn")
+        with c_flight: fl_s=st.text_input("Flight $", key="fl")
+
+        c_trans, c_sell = st.columns(2)
+        with c_trans: tr_s=st.text_input("Transport $", key="tr")
+        with c_sell: sell_s=st.text_input("Selling Price $ *", key="sell")
+
+        pn=to_f(pn_s); fl=to_f(fl_s); tr=to_f(tr_s); sell=to_f(sell_s)
+
+        try: room_count_val=int(room_count) if room_count.strip()!="" else 0
+        except: room_count_val=0
+        rc_for_calc = room_count_val if room_count_val > 0 else 1
+        cost_total = (pn * nights_val * rc_for_calc) + fl + tr
+        if cost_total > 0:
+            st.caption(f"💰 الكوست صار علينا: ${cost_total:,.2f}")
+
+        notes=st.text_input("Note", key="notes")
+        airline=st.text_input("Airline (empty=no flight)", key="airline", placeholder="")
+        vno=st.text_input("Voucher No", key="vno")
+
+        if st.button("SAVE SALE", type="primary", use_container_width=True, key="save_btn"):
+            airline_val = airline.strip()
+            transport_val = transport_co.strip()
+            comp_full, comp_ok = smart_match(comp, agents_for_js, agents_upper)
+            hotel_full, hotel_ok = smart_match(hotel, hotels_for_js, hotels_upper)
+            is_no_flight = airline_val == "" or airline_val == "0"
+            is_no_transport = transport_val == "" or transport_val == "0"
+            airline_full, airline_ok = ("", True) if is_no_flight else smart_match(airline_val, airlines_for_js, airlines_upper)
+            transport_full, transport_ok = ("", True) if is_no_transport else smart_match(transport_val, transport_for_js, transport_upper)
+            if not comp.strip() or not hotel.strip() or not emp.strip() or not pas.strip(): 
+                st.error("Fill required")
+            elif not comp_ok: st.error(f"❌ Agent '{comp}' not found!")
+            elif not hotel_ok: st.error(f"❌ Hotel '{hotel}' not found!")
+            elif not airline_ok: st.error(f"❌ Airline '{airline}' not found!")
+            elif not transport_ok: st.error(f"❌ Transport '{transport_co}' not found!")
             else:
                 ht_tot=to_f(pn)*to_f(nights)*to_f(room_count)
                 cost=ht_tot+to_f(fl)+to_f(tr)
                 profit=to_f(sell)-cost
                 st.session_state["pending"]={"sale_date":str(sd),"entry_date":str(ed),"exit_date":str(xd),"company":comp_full,"passengers":pas.strip(),"hotel":hotel_full,"room_type":room_type.strip(),"room_count":int(to_f(room_count)),"nights":int(to_f(nights)),"price_night":float(to_f(pn)),"hotel_total":float(ht_tot),"flight":float(to_f(fl)),"transport":float(to_f(tr)),"sell":float(to_f(sell)),"cost":float(cost),"profit":float(profit),"voucher":vno,"notes":notes,"airline":airline_full,"emp":emp.strip(),"dep":dep_time.strip(),"ret":ret_time.strip(),"transport_company":transport_full,"fno_dep":flight_no_dep.strip(),"fno_ret":flight_no_ret.strip()}
-            if st.session_state.get("pending"):
-                d=st.session_state["pending"]
-                st.warning(f"✅ {d['company']} - {d['passengers'].split(chr(10))[0]} | {d['room_count']} Rooms | Sell ${d['sell']:.2f}")
-                c1,c2=st.columns(2)
+
+        if st.session_state.get("pending"):
+            d=st.session_state["pending"]
+            st.warning(f"✅ {d['company']} - {d['passengers'].split(chr(10))[0]} | {d['room_count']} Rooms | Sell ${d['sell']:.2f}")
+            c1,c2=st.columns(2)
             with c1:
                 if st.button("YES", type="primary", use_container_width=True):
                     conn=sqlite3.connect(DB, check_same_thread=False)
