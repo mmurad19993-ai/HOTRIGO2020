@@ -159,26 +159,67 @@ def booking_to_sheet_row(b):
         else:
             try: d = dict(b)
             except: d = {k: b[k] for k in b.keys()}
+
         def gv(k, default=""):
             v = d.get(k, default)
             return "" if v is None else v
         def to_f(v):
             try: return float(str(v).replace(",", "").strip() or 0)
             except: return 0.0
+
         nights = 0
         try:
-            from datetime import datetime as dt
-            en = dt.strptime(str(gv("entry_date"))[:10], "%Y-%m-%d")
-            ex = dt.strptime(str(gv("exit_date"))[:10], "%Y-%m-%d")
+            en = datetime.strptime(str(gv("entry_date"))[:10], "%Y-%m-%d")
+            ex = datetime.strptime(str(gv("exit_date"))[:10], "%Y-%m-%d")
             nights = max(0, (ex - en).days)
         except: nights = 0
+
         try: room_count = 0 if str(gv("room_count")).strip()=="" else int(float(str(gv("room_count"))))
         except: room_count = 0
+
+        # عدد المسافرين
+        pax_names = str(gv("passengers")).strip()
+        pax_count = len([x for x in pax_names.replace("\n",",").split(",") if x.strip()!=""]) if pax_names else 0
+
         sell = to_f(gv("sell"))
-        cost = to_f(gv("price_per_night"))*room_count*(nights if nights>0 else 1)+to_f(gv("flight_cost"))+to_f(gv("transport_cost"))
-        if room_count==0: cost = to_f(gv("flight_cost"))+to_f(gv("transport_cost"))
-        profit = sell-cost
-        row = [gv("id"),gv("sale_date"),gv("company"),gv("passengers"),gv("room_type"),room_count,gv("hotel"),gv("entry_date"),gv("exit_date"),nights,sell,cost,profit,gv("flight_cost"),gv("transport_cost"),gv("price_per_night"),gv("notes"),gv("voucher_no"),gv("airline"),gv("emp"),gv("flight_dep_time"),gv("flight_ret_time"),gv("transport_company"),gv("flight_no_dep"),gv("flight_no_ret"),gv("dep_airport"),gv("ret_airport")]
+        pn = to_f(gv("price_per_night"))
+        fl = to_f(gv("flight_cost"))
+        tr = to_f(gv("transport_cost"))
+        hotel_total = pn * room_count * (nights if nights>0 else 1)
+        cost = hotel_total + fl + tr
+        if room_count==0: cost = fl + tr
+        profit = sell - cost
+
+        # الترتيب الجديد: رقم الحجز | اسم الوكيل | اسماء المسافرين | عدد المسافرين | فندق | عدد غرف | نوع غرف | سعر طيران | سعر نقل | بيع | كوست | باقي
+        row = [
+            gv("id"), # ID - رقم الحجز
+            gv("company"), # Agent - اسم الوكيل
+            gv("passengers"), # Passengers - اسماء المسافرين
+            pax_count, # Passengers Count - عدد المسافرين
+            gv("hotel"), # Hotel - اي فندق
+            room_count, # Rooms - عدد غرف الفندق
+            gv("room_type"), # Room Type - نوع الغرف
+            fl, # Flight $ - سعر الطيران
+            tr, # Transport $ - سعر النقل
+            sell, # Sell Price - سعر البيع
+            cost, # Cost - الكوست
+            profit, # Profit
+            gv("sale_date"), # Sale Date
+            gv("entry_date"), # Check-in
+            gv("exit_date"), # Check-out
+            nights, # Nights
+            gv("voucher_no"), # Voucher No
+            gv("notes"), # Notes
+            gv("airline"), # Airline
+            gv("emp"), # Employee
+            gv("flight_dep_time"), # Dep Time
+            gv("flight_ret_time"), # Ret Time
+            gv("flight_no_dep"), # Flight No Dep
+            gv("flight_no_ret"), # Flight No Ret
+            gv("transport_company"), # Transport Co
+            pn, # Price Night
+            hotel_total # Hotel Total
+        ]
         return [str(x) if x is not None else "" for x in row]
     except Exception as e:
         print(f"booking_to_sheet_row error {e} for {b}")
