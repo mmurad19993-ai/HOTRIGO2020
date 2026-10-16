@@ -695,76 +695,88 @@ def edit_dialog(row):
 
     e_trans_co = st.text_input("Transport Company (empty=no transfer)", value=gv("transport_company"), key="dlg_transco")
 
-    # ===== نظام تنقل شبكي 2D - يمين / يسار / فوق / تحت =====
+    # ===== نظام تنقل شبكي ثابت - إكسل مثل =====
     components.html("""
     <script>
     const doc = window.parent.document;
-    function getMap(){
+    function getFields(){
         const dlg = doc.querySelector('div[data-testid="stDialog"]');
         if(!dlg) return [];
-        const arr = [];
+        const list=[];
         dlg.querySelectorAll('[data-testid="stTextInput"], [data-testid="stTextArea"], [data-testid="stSelectbox"]').forEach(w=>{
-            let el = w.dataset.testid === 'stSelectbox' ? w.querySelector('div[role="combobox"]') : w.querySelector('input, textarea');
-            if(!el || el.offsetParent===null) return;
-            const r = w.getBoundingClientRect();
-            arr.push({w, el, x:r.left, y:r.top, cx:(r.left+r.right)/2, cy:(r.top+r.bottom)/2});
+            let el = w.dataset.testid==='stSelectbox' ? w.querySelector('div[role="combobox"]') : w.querySelector('input, textarea');
+            if(el) list.push(el);
         });
-        return arr;
+        return list;
     }
-    function findCur(map){
-        const a = doc.activeElement;
-        for(let m of map){ if(m.el===a || m.w.contains(a)) return m; }
+    // 13 صف - كل صف فيه عمودين او عمود واحد
+    const GRID = [
+        [0,1],   // 0:Sale | 1:Entry
+        [2,3],   // 2:Exit | 3:Agent
+        [4],     // 4:Passengers
+        [5,6],   // 5:Room Type | 6:Number of Rooms
+        [7,8],   // 7:Hotel | 8:Employee
+        [9,10],  // 9:Price | 10:Flight
+        [11,12], // 11:Transport | 12:Selling
+        [13],    // 13:Note
+        [14,15], // 14:Airline | 15:Voucher
+        [16,17], // 16:Dep Time | 17:Ret Time
+        [18,19], // 18:Flight No Dep | 19:Ret
+        [20,21], // 20:Dep Airport | 21:Ret Airport
+        [22]     // 22:Transport Company
+    ];
+    function findPos(idx){
+        for(let r=0;r<GRID.length;r++){
+            let c=GRID[r].indexOf(idx);
+            if(c!==-1) return {r,c};
+        }
         return null;
     }
-    function focusM(m){ if(m){ m.el.focus(); try{ m.el.select(); }catch(e){} } }
-
     doc.addEventListener('keydown', function(e){
         if(!['ArrowRight','ArrowLeft','ArrowDown','ArrowUp','Enter'].includes(e.key)) return;
         const dlg = doc.querySelector('div[data-testid="stDialog"]');
         if(!dlg || !dlg.contains(doc.activeElement)) return;
-        const map = getMap();
-        const cur = findCur(map);
-        if(!cur) return;
-        const isArea = doc.activeElement.tagName==='TEXTAREA';
-        if(e.key==='Enter' && isArea && !e.ctrlKey) return;
-
-        let target=null;
-        const ROW_TOL=30;
-
-        if(e.key==='ArrowRight'){
-            let cands = map.filter(m=> m!==cur && Math.abs(m.y-cur.y)<ROW_TOL && m.x>cur.x-5);
-            cands.sort((a,b)=>a.x-b.x);
-            target=cands[0];
-        } else if(e.key==='ArrowLeft'){
-            let cands = map.filter(m=> m!==cur && Math.abs(m.y-cur.y)<ROW_TOL && m.x<cur.x+5);
-            cands.sort((a,b)=>b.x-a.x);
-            target=cands[0];
-        } else if(e.key==='ArrowDown' || e.key==='Enter'){
-            let cands = map.filter(m=> m!==cur && m.y>cur.y+5 && Math.abs(m.x-cur.x)<160);
-            if(!cands.length) cands = map.filter(m=> m.y>cur.y+5);
-            cands.sort((a,b)=>{
-                const ax=Math.abs(a.x-cur.x), bx=Math.abs(b.x-cur.x);
-                if(Math.abs(ax-bx)>25) return ax-bx;
-                return a.y-b.y;
-            });
-            target=cands[0];
-        } else if(e.key==='ArrowUp'){
-            let cands = map.filter(m=> m!==cur && m.y<cur.y-5 && Math.abs(m.x-cur.x)<160);
-            if(!cands.length) cands = map.filter(m=> m.y<cur.y-5);
-            cands.sort((a,b)=>{
-                const ax=Math.abs(a.x-cur.x), bx=Math.abs(b.x-cur.x);
-                if(Math.abs(ax-bx)>25) return ax-bx;
-                return b.y-a.y;
-            });
-            target=cands[0];
+        const fields=getFields();
+        if(fields.length<23) return;
+        let curIdx=-1;
+        for(let i=0;i<fields.length;i++){
+            if(fields[i]===doc.activeElement || fields[i].contains(doc.activeElement) || doc.activeElement.contains(fields[i])){curIdx=i; break;}
         }
-
-        if(target){
+        if(curIdx===-1) return;
+        const isArea=doc.activeElement.tagName==='TEXTAREA';
+        if(e.key==='Enter' && isArea && !e.ctrlKey) return;
+        const pos=findPos(curIdx);
+        if(!pos) return;
+        let target=null;
+        if(e.key==='ArrowRight'){
+            let row=GRID[pos.r];
+            if(pos.c+1<row.length) target=row[pos.c+1];
+        } else if(e.key==='ArrowLeft'){
+            let row=GRID[pos.r];
+            if(pos.c-1>=0) target=row[pos.c-1];
+        } else if(e.key==='ArrowDown'){
+            for(let r=pos.r+1;r<GRID.length;r++){
+                if(GRID[r][pos.c]!==undefined){target=GRID[r][pos.c]; break;}
+                if(GRID[r].length===1){target=GRID[r][0]; break;}
+            }
+        } else if(e.key==='ArrowUp'){
+            for(let r=pos.r-1;r>=0;r--){
+                if(GRID[r][pos.c]!==undefined){target=GRID[r][pos.c]; break;}
+                if(GRID[r].length===1){target=GRID[r][0]; break;}
+            }
+        } else if(e.key==='Enter'){
+            let row=GRID[pos.r];
+            if(pos.c+1<row.length) target=row[pos.c+1];
+            else { for(let r=pos.r+1;r<GRID.length;r++){ if(GRID[r][0]!==undefined){target=GRID[r][0]; break;} } }
+            if(target===null){
+                const btn=doc.querySelector('div[data-testid="stDialog"] button[kind="primary"]');
+                if(btn){ e.preventDefault(); btn.click(); return; }
+            }
+        }
+        if(target!==null){
             e.preventDefault();
-            focusM(target);
-        } else if(e.key==='Enter' && !isArea){
-            const btn = doc.querySelector('div[data-testid="stDialog"] button[kind="primary"]');
-            if(btn){ e.preventDefault(); btn.click(); }
+            const el=fields[target];
+            if(el){ el.focus(); try{ el.select(); }catch(_){} }
         }
     }, true);
     </script>
