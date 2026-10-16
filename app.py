@@ -1092,7 +1092,7 @@ if view_btn:
 with t2:
     st.markdown("## 💰 كشف حساب الوكلاء")
 
-    # --- سطر جديد: اختيار الوكيل + طباعة PDF + تصدير Excel ---
+    # --- عرض كشف وكيل + طباعة + تصدير ---
     st.markdown("#### 🔍 عرض كشف وكيل")
     c1, c2, c3 = st.columns([3, 1, 1])
 
@@ -1101,37 +1101,67 @@ with t2:
     conn.close()
 
     with c1:
-        view_agent = st.selectbox("اختر الوكيل لعرض كشفو", all_companies, key="view_agent", label_visibility="collapsed", placeholder="اختر الوكيل...")
+        view_agent = st.selectbox("اختر الوكيل", all_companies, key="view_agent", placeholder="اختر الوكيل...")
 
-    # جيب حجوزات هالوكيل
     conn=sqlite3.connect(DB)
     df_agent = pd.read_sql("SELECT * FROM bookings WHERE company=? ORDER BY entry_date DESC", conn, params=(view_agent,))
     conn.close()
 
     with c2:
-        # PDF
         if st.button("🖨️ طباعة PDF", use_container_width=True, key="btn_pdf"):
-            from fpdf import FPDF
-            pdf = FPDF(orientation='L')
-            pdf.add_page()
-            pdf.set_font("Arial", "B", 14)
-            pdf.cell(0, 10, f"Agent Statement - {view_agent}", ln=True, align='C')
-            pdf.ln(5)
-            pdf.set_font("Arial", "", 8)
-            # هيدر
-            cols = ["Date", "Hotel", "Pax", "Sell", "Note"]
-            for col in cols:
-                pdf.cell(55, 8, col, border=1)
-            pdf.ln()
-            for _, r in df_agent.iterrows():
-                pdf.cell(55, 6, str(r.get('entry_date','')), border=1)
-                pdf.cell(55, 6, str(r.get('hotel',''))[:30], border=1)
-                pdf.cell(55, 6, str(r.get('passengers',''))[:30], border=1)
-                pdf.cell(55, 6, str(r.get('sell','')), border=1)
-                pdf.cell(55, 6, str(r.get('notes','') or r.get('note',''))[:30], border=1)
-                pdf.ln()
-            pdf_bytes = pdf.output(dest='S').encode('latin-1')
-            st.download_button("📥 تحميل PDF", pdf_bytes, file_name=f"{view_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key="dl_pdf")
+            try:
+                from fpdf import FPDF
+                from io import BytesIO
+                pdf = FPDF(orientation='L', unit='mm', format='A4')
+                pdf.add_page()
+                pdf.set_font("Arial", "B", 12)
+                pdf.cell(0, 10, f"Agent Statement - {view_agent}", ln=True, align='C')
+                pdf.ln(5)
+                pdf.set_font("Arial", "", 8)
+                # هيدر مبسط
+                for _, r in df_agent.iterrows():
+                    txt = f"{r.get('entry_date','')} | {r.get('hotel','')} | {r.get('passengers','')} | {r.get('sell','')} | {r.get('notes','') or r.get('note','')}"
+                    pdf.cell(0, 6, txt[:180], ln=True, border=1)
+
+                # --- هذا هو التصليح المهم ---
+                pdf_buffer = BytesIO()
+                pdf.output(pdf_buffer)
+                pdf_bytes = pdf_buffer.getvalue()
+
+                st.download_button("📥 تحميل PDF", pdf_bytes, file_name=f"{view_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key="dl_pdf")
+            except Exception as e:
+                st.error(f"خطأ PDF: {e}")
+
+    with c3:
+        from io import BytesIO
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_agent.to_excel(writer, index=False, sheet_name="Statement")
+        st.download_button("📊 تصدير Excel", output.getvalue(), file_name=f"{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="dl_excel")
+
+    st.dataframe(df_agent, use_container_width=True, hide_index=True)
+    st.divider()
+
+    col_pay1, col_pay2 = st.columns([1,2])
+    with col_pay1:
+        st.markdown("#### اضافة دفعة جديدة")
+        conn=sqlite3.connect(DB); agents_list=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]; conn.close()
+        pay_agent = st.selectbox("اختر الوكيل", agents_list, key="pay_agent")
+        pay_date = st.date_input("تاريخ الدفعة", datetime.now(), key="pay_date")
+        pay_amount = st.text_input("المبلغ $", key="pay_amount")
+        pay_note = st.text_input("ملاحظة", key="pay_note", placeholder="تحويل بنكي - كاش...")
+        if st.button("اضافة دفعة", type="primary", use_container_width=True):
+            amt = to_f(pay_amount)
+            if not pay_agent or amt<=0: st.error("اختر وكيل ومبلغ صحيح")
+            else:
+                conn=sqlite3.connect(DB); conn.execute("INSERT INTO agent_payments (agent, pay_date, amount, note) VALUES (?,?,?,?)", (pay_agent, str(pay_date), amt, pay_note)); conn.commit(); conn.close()
+                st.success(f"تم اضافة ${amt} للوكيل {pay_agent}"); st.rerun()
+    with col_pay2:
+        st.markdown("#### ملخص الأرصدة")
+        conn=sqlite3.connect(DB)
+        summary = pd.read_sql("SELECT b.company as Agent, SUM(b.sell) as Total_Sales, (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Total_Paid, SUM(b.sell) - (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Balance FROM bookings b GROUP BY b.company", conn)
+        conn.close()
+        st.dataframe(summary, use_container_width=True, hide_index=True)
 
     with c3:
         from io import BytesIO
