@@ -1090,7 +1090,6 @@ if view_btn:
 
             view_dialog()
 with t2:
-    df_display = build_statement(df_raw.copy()) if 'df_raw' in locals() and not df_raw.empty else pd.DataFrame()
     st.divider()
 
     st.markdown("""
@@ -1105,21 +1104,17 @@ with t2:
     left_side, right_side = st.columns([1, 1], gap="large")
 
     with left_side:
-        # 40% عرض - أديق من الصورة بكتير
         narrow, gap = st.columns([0.40, 0.60])
         with narrow:
             st.markdown("#### Add New Payment")
             conn=sqlite3.connect(DB)
             agents_list=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]
             conn.close()
-
-            # زرين قد بعض 1:1 بنفس السطر
             top_b1, top_b2 = st.columns([1, 1], gap="small")
-            
-            pay_agent=st.selectbox("Select Agent",agents_list,key=f"pay_agent_{view_agent}" if 'view_agent' in locals() else "pay_agent_main",index=agents_list.index(view_agent) if 'view_agent' in locals() and view_agent in agents_list else 0)
-            pay_date=st.date_input("Payment Date",datetime.now(),key=f"pay_date_{view_agent}" if 'view_agent' in locals() else "pay_date_main")
-            pay_amount=st.text_input("Amount $",key=f"pay_amount_{view_agent}" if 'view_agent' in locals() else "pay_amount_main", placeholder="$ Amount")
-            pay_note=st.text_input("Note",key=f"pay_note_{view_agent}" if 'view_agent' in locals() else "pay_note_main", placeholder="Bank transfer - Cash...")
+            pay_agent=st.selectbox("Select Agent",agents_list,key="pay_agent_main")
+            pay_date=st.date_input("Payment Date",datetime.now(),key="pay_date_main")
+            pay_amount=st.text_input("Amount $",key="pay_amount_main", placeholder="$ Amount")
+            pay_note=st.text_input("Note",key="pay_note_main", placeholder="Bank transfer - Cash...")
 
             with top_b1:
                 if st.button("🖨️ Print PDF",use_container_width=True,key=f"btn_pdf_add_{pay_agent}"):
@@ -1136,7 +1131,6 @@ with t2:
                         if df_pdf_source.empty:
                             st.error(f"No bookings for {pay_agent}")
                             st.stop()
-
                         class PDF(FPDF):
                             def header(self):
                                 self.set_font("Arial","B",26);self.set_text_color(13,71,161);self.cell(0,14,"HOTRIGO",ln=True,align='C')
@@ -1233,11 +1227,9 @@ with t2:
         except Exception as e:
             st.error(f"Summary Error: {e}")
 
-# ============== T3 - صفحة التعاريف الجديدة ==============
 with t3:
     st.markdown("### ⚙️ Definitions - تعريف البيانات الأساسية")
     st.divider()
-    
     conn = sqlite3.connect(DB)
     conn.execute("CREATE TABLE IF NOT EXISTS agents (name TEXT PRIMARY KEY)")
     conn.execute("CREATE TABLE IF NOT EXISTS hotels (name TEXT PRIMARY KEY)")
@@ -1245,12 +1237,10 @@ with t3:
     conn.execute("CREATE TABLE IF NOT EXISTS transport_companies (name TEXT PRIMARY KEY)")
     conn.commit()
     conn.close()
-
     c1, c2 = st.columns(2, gap="large")
     c3, c4 = st.columns(2, gap="large")
-
     with c1:
-        st.markdown("#### 👥 Agents - الوكلاء")
+        st.markdown("#### 👥 Agents")
         na = st.text_input("New Agent", key="na_def_t3", placeholder="Agent name...")
         if st.button("Add Agent", key="add_a_t3", use_container_width=True) and na.strip():
             conn=sqlite3.connect(DB)
@@ -1263,9 +1253,8 @@ with t3:
             da=st.selectbox("Delete Agent", dfa['Agents'].tolist(), key="del_a_t3")
             if st.button("🗑️ Delete Agent", key="delb_a_t3"):
                 conn=sqlite3.connect(DB); conn.execute("DELETE FROM agents WHERE name=?", (da,)); conn.commit(); conn.close(); st.rerun()
-
     with c2:
-        st.markdown("#### 🏨 Hotels - الفنادق")
+        st.markdown("#### 🏨 Hotels")
         nh = st.text_input("New Hotel", key="nh_def_t3", placeholder="Hotel name...")
         if st.button("Add Hotel", key="add_h_t3", use_container_width=True) and nh.strip():
             conn=sqlite3.connect(DB)
@@ -1278,9 +1267,8 @@ with t3:
             dh=st.selectbox("Delete Hotel", dfh['Hotels'].tolist(), key="del_h_t3")
             if st.button("🗑️ Delete Hotel", key="delb_h_t3"):
                 conn=sqlite3.connect(DB); conn.execute("DELETE FROM hotels WHERE name=?", (dh,)); conn.commit(); conn.close(); st.rerun()
-
     with c3:
-        st.markdown("#### ✈️ Airlines - شركات الطيران")
+        st.markdown("#### ✈️ Airlines")
         nal = st.text_input("New Airline", key="nal_def_t3", placeholder="e.g. Turkish Airlines")
         if st.button("Add Airline", key="add_al_t3", use_container_width=True) and nal.strip():
             conn=sqlite3.connect(DB)
@@ -1293,9 +1281,8 @@ with t3:
             dal=st.selectbox("Delete Airline", dfal['Airlines'].tolist(), key="del_al_t3")
             if st.button("🗑️ Delete Airline", key="delb_al_t3"):
                 conn=sqlite3.connect(DB); conn.execute("DELETE FROM airlines WHERE name=?", (dal,)); conn.commit(); conn.close(); st.rerun()
-
     with c4:
-        st.markdown("#### 🚌 Transport - شركات النقل")
+        st.markdown("#### 🚌 Transport")
         nt = st.text_input("New Transport", key="nt_def_t3", placeholder="e.g. Metro Turizm")
         if st.button("Add Transport", key="add_t_t3", use_container_width=True) and nt.strip():
             conn=sqlite3.connect(DB)
