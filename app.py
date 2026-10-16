@@ -1058,21 +1058,33 @@ if view_btn:
                     white-space:pre-line;
                     margin-top:0;
                 }
+                .note-box {
+                    background:#fff8dc;
+                    border:1px solid #e6c84a;
+                    border-radius:6px;
+                    padding:6px 8px;
+                    font-size:14px;
+                    font-weight:900;
+                    white-space:pre-line;
+                }
                 </style>
                 """, unsafe_allow_html=True)
                 pax = f"<div class='pax-box'>{d.get('passengers','')}</div>"
+                notes_val = d.get('notes','') or d.get('note','')
+                note_html = f"<div class='note-box'>Note: {notes_val}</div>" if notes_val and str(notes_val).strip() else ""
 
                 # --- فوق ---
                 st.markdown("<p style='font-weight:900; font-size:15px; margin:0 0 2px 0;'>Passengers:</p>", unsafe_allow_html=True)
                 st.markdown(pax, unsafe_allow_html=True)
-                
-                st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True) # بين الاسم والفندق
+                st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
                 st.markdown(f"<p style='font-weight:900; font-size:15px; margin:0;'>Hotel: {d.get('hotel','')}</p>", unsafe_allow_html=True)
-                
-                st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True) # بين الفندق وباقي التفاصيل
+                st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
                 st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Check-in: {d.get('entry_date','')}</p>", unsafe_allow_html=True)
                 st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Departure: {d.get('flight_dep_time','')} {d.get('dep_airport','')}</p>", unsafe_allow_html=True)
                 st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Flight No: {d.get('flight_no_dep','')}</p>", unsafe_allow_html=True)
+                if note_html:
+                    st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+                    st.markdown(note_html, unsafe_allow_html=True)
                 
                 st.markdown("<div style='height:50px;'></div>", unsafe_allow_html=True)
                 st.divider()
@@ -1086,6 +1098,9 @@ if view_btn:
                 st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Check-out: {d.get('exit_date','')}</p>", unsafe_allow_html=True)
                 st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Return: {d.get('flight_ret_time','')} {d.get('ret_airport','')}</p>", unsafe_allow_html=True)
                 st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Flight No: {d.get('flight_no_ret','')}</p>", unsafe_allow_html=True)
+                if note_html:
+                    st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+                    st.markdown(note_html, unsafe_allow_html=True)
 
             view_dialog()
 with t2:
