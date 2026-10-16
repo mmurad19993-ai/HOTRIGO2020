@@ -1239,12 +1239,14 @@ with t3:
     with c1:
         with st.container(border=True):
             st.markdown("#### 👥 Agents")
-            na = st.text_input("", key="na_4col", placeholder="Agent name...", label_visibility="collapsed")
-            if st.button("Add Agent", key="add_a_4col", use_container_width=True) and na.strip():
-                conn=sqlite3.connect(DB)
-                try: conn.execute("INSERT INTO agents (name) VALUES (?)", (na.strip().upper(),)); conn.commit()
-                except: pass
-                conn.close(); st.rerun()
+            with st.form(key="f_agents", clear_on_submit=True):
+                na = st.text_input("", placeholder="Agent name...", label_visibility="collapsed")
+                sa = st.form_submit_button("Add Agent", use_container_width=True)
+                if sa and na.strip():
+                    conn=sqlite3.connect(DB)
+                    try: conn.execute("INSERT INTO agents (name) VALUES (?)", (na.strip().upper(),)); conn.commit()
+                    except: pass
+                    conn.close(); st.rerun()
             conn=sqlite3.connect(DB); dfa=pd.read_sql("SELECT name as Agents FROM agents ORDER BY name", conn); conn.close()
             st.dataframe(dfa, use_container_width=True, height=250, hide_index=True)
             if not dfa.empty:
@@ -1258,12 +1260,14 @@ with t3:
     with c2:
         with st.container(border=True):
             st.markdown("#### 🏨 Hotels")
-            nh = st.text_input("", key="nh_4col", placeholder="Hotel name...", label_visibility="collapsed")
-            if st.button("Add Hotel", key="add_h_4col", use_container_width=True) and nh.strip():
-                conn=sqlite3.connect(DB)
-                try: conn.execute("INSERT INTO hotels (name) VALUES (?)", (nh.strip(),)); conn.commit()
-                except: pass
-                conn.close(); st.rerun()
+            with st.form(key="f_hotels", clear_on_submit=True):
+                nh = st.text_input("", placeholder="Hotel name...", label_visibility="collapsed")
+                sh = st.form_submit_button("Add Hotel", use_container_width=True)
+                if sh and nh.strip():
+                    conn=sqlite3.connect(DB)
+                    try: conn.execute("INSERT INTO hotels (name) VALUES (?)", (nh.strip(),)); conn.commit()
+                    except: pass
+                    conn.close(); st.rerun()
             conn=sqlite3.connect(DB); dfh=pd.read_sql("SELECT name as Hotels FROM hotels ORDER BY name", conn); conn.close()
             st.dataframe(dfh, use_container_width=True, height=250, hide_index=True)
             if not dfh.empty:
@@ -1277,12 +1281,14 @@ with t3:
     with c3:
         with st.container(border=True):
             st.markdown("#### ✈️ Airlines")
-            nal = st.text_input("", key="nal_4col", placeholder="e.g. Turkish Airlines", label_visibility="collapsed")
-            if st.button("Add Airline", key="add_al_4col", use_container_width=True) and nal.strip():
-                conn=sqlite3.connect(DB)
-                try: conn.execute("INSERT INTO airlines (name) VALUES (?)", (nal.strip(),)); conn.commit()
-                except: pass
-                conn.close(); st.rerun()
+            with st.form(key="f_airlines", clear_on_submit=True):
+                nal = st.text_input("", placeholder="e.g. Turkish Airlines", label_visibility="collapsed")
+                sal = st.form_submit_button("Add Airline", use_container_width=True)
+                if sal and nal.strip():
+                    conn=sqlite3.connect(DB)
+                    try: conn.execute("INSERT INTO airlines (name) VALUES (?)", (nal.strip(),)); conn.commit()
+                    except: pass
+                    conn.close(); st.rerun()
             conn=sqlite3.connect(DB); dfal=pd.read_sql("SELECT name as Airlines FROM airlines ORDER BY name", conn); conn.close()
             st.dataframe(dfal, use_container_width=True, height=250, hide_index=True)
             if not dfal.empty:
@@ -1296,12 +1302,14 @@ with t3:
     with c4:
         with st.container(border=True):
             st.markdown("#### 🚌 Transport")
-            nt = st.text_input("", key="nt_4col", placeholder="e.g. Metro Turizm", label_visibility="collapsed")
-            if st.button("Add Transport", key="add_t_4col", use_container_width=True) and nt.strip():
-                conn=sqlite3.connect(DB)
-                try: conn.execute("INSERT INTO transport_companies (name) VALUES (?)", (nt.strip(),)); conn.commit()
-                except: pass
-                conn.close(); st.rerun()
+            with st.form(key="f_transport", clear_on_submit=True):
+                nt = st.text_input("", placeholder="e.g. Metro Turizm", label_visibility="collapsed")
+                stf = st.form_submit_button("Add Transport", use_container_width=True)
+                if stf and nt.strip():
+                    conn=sqlite3.connect(DB)
+                    try: conn.execute("INSERT INTO transport_companies (name) VALUES (?)", (nt.strip(),)); conn.commit()
+                    except: pass
+                    conn.close(); st.rerun()
             conn=sqlite3.connect(DB); dft=pd.read_sql("SELECT name as Transport FROM transport_companies ORDER BY name", conn); conn.close()
             st.dataframe(dft, use_container_width=True, height=250, hide_index=True)
             if not dft.empty:
