@@ -1038,10 +1038,10 @@ if view_btn:
         row = conn.execute("SELECT * FROM bookings WHERE id=?", (int(ids[0]),)).fetchone()
         conn.close()
         if row:
-            @st.dialog("Booking Details", width="large")
+            @st.dialog("Booking Details", width="small")
             def view_dialog():
                 d = dict(row)
-                st.markdown(f"<h1 style='text-align:center; font-weight:900; font-size:32px;'>{d.get('company','')}</h1>", unsafe_allow_html=True)
+                st.markdown(f"<h3 style='text-align:center; font-weight:900; margin-bottom:0;'>{d.get('company','')}</h3>", unsafe_allow_html=True)
                 st.divider()
                 c1, c2 = st.columns(2)
                 with c1:
@@ -1053,8 +1053,10 @@ if view_btn:
                     st.markdown(f"**Check-in:** {d.get('entry_date','')}")
                     st.markdown(f"**Check-out:** {d.get('exit_date','')}")
                     st.divider()
-                    st.markdown(f"**Departure:** {d.get('flight_dep_time','')} Airport {d.get('dep_airport','')} - Flight No: **{d.get('flight_no_dep','')}**")
-                    st.markdown(f"**Return:** {d.get('flight_ret_time','')} Airport {d.get('ret_airport','')} - Flight No: **{d.get('flight_no_ret','')}**")
+                    st.markdown(f"**Departure:** {d.get('flight_dep_time','')} Airport {d.get('dep_airport','')}")
+                    st.markdown(f"Flight No: **{d.get('flight_no_dep','')}**")
+                    st.markdown(f"**Return:** {d.get('flight_ret_time','')} Airport {d.get('ret_airport','')}")
+                    st.markdown(f"Flight No: **{d.get('flight_no_ret','')}**")
             view_dialog()
 with t2:
     st.markdown("## 💰 كشف حساب الوكلاء")
