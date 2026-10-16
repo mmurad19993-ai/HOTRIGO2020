@@ -695,7 +695,7 @@ def edit_dialog(row):
 
     e_trans_co = st.text_input("Transport Company (empty=no transfer)", value=gv("transport_company"), key="dlg_transco")
 
-    # ===== شبكة ثابتة + تنظيف الـ listeners القديمة =====
+    # ===== شبكة ثابتة + تنقل ذكي للـ textarea =====
     components.html("""
     <script>
     const doc = window.parent.document;
@@ -736,12 +736,16 @@ def edit_dialog(row):
         const active = doc.activeElement;
         const isArea = active.tagName==='TEXTAREA';
         
-        // للـ textarea خلي السهم يتحرك جوا النص الا اذا Ctrl مضغوط
         if(isArea){
-            if(e.key==='ArrowDown' && !e.ctrlKey) return;
-            if(e.key==='ArrowUp' && !e.ctrlKey) return;
-            if(e.key==='ArrowRight' && active.selectionStart < active.value.length && !e.ctrlKey) return;
-            if(e.key==='ArrowLeft' && active.selectionStart > 0 && !e.ctrlKey) return;
+            const start = active.selectionStart;
+            const end = active.selectionEnd;
+            const val = active.value;
+            const before = val.substring(0, start);
+            const after = val.substring(end);
+            if(e.key==='ArrowUp' && before.includes('\\n')) return;
+            if(e.key==='ArrowDown' && after.includes('\\n')) return;
+            if(e.key==='ArrowLeft' && start>0) return;
+            if(e.key==='ArrowRight' && end < val.length) return;
             if(e.key==='Enter' && !e.ctrlKey) return;
         } else {
             if(e.key==='ArrowRight' && active.selectionStart < active.value.length) return;
@@ -757,7 +761,7 @@ def edit_dialog(row):
         } else if(e.key==='ArrowLeft'){
             let row=GRID[pos.r];
             if(pos.c-1>=0) target=row[pos.c-1];
-        } else if(e.key==='ArrowDown'){
+        } else if(e.key==='ArrowDown' || (e.key==='Enter' && isArea)){
             for(let r=pos.r+1;r<GRID.length;r++){
                 if(GRID[r][pos.c]!==undefined){target=GRID[r][pos.c]; break;}
                 if(GRID[r].length===1){target=GRID[r][0]; break;}
