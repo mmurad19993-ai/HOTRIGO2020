@@ -1038,26 +1038,24 @@ if view_btn:
         row = conn.execute("SELECT * FROM bookings WHERE id=?", (int(ids[0]),)).fetchone()
         conn.close()
         if row:
-            @st.dialog("عرض الحجز", width="large")
+            @st.dialog("Booking Details", width="large")
             def view_dialog():
                 d = dict(row)
                 st.markdown(f"<h1 style='text-align:center; font-weight:900; font-size:32px;'>{d.get('company','')}</h1>", unsafe_allow_html=True)
                 st.divider()
                 c1, c2 = st.columns(2)
                 with c1:
-                    st.markdown("**👥 المسافرين:**")
+                    st.markdown("**Passengers:**")
                     st.info(d.get('passengers',''))
-                    st.markdown(f"**🏨 الفندق:** {d.get('hotel','')}")
-                    st.markdown(f"**📝 الملاحظة:** {d.get('notes','')}")
+                    st.markdown(f"**Hotel:** {d.get('hotel','')}")
+                    st.markdown(f"**Note:** {d.get('notes','')}")
                 with c2:
-                    st.markdown(f"**📅 الدخول:** {d.get('entry_date','')}")
-                    st.markdown(f"**📅 الخروج:** {d.get('exit_date','')}")
+                    st.markdown(f"**Check-in:** {d.get('entry_date','')}")
+                    st.markdown(f"**Check-out:** {d.get('exit_date','')}")
                     st.divider()
-                    st.markdown(f"**✈️ ذهاب:** {d.get('flight_dep_time','')} مطار {d.get('dep_airport','')}")
-                    st.markdown(f"**✈️ عودة:** {d.get('flight_ret_time','')} مطار {d.get('ret_airport','')}")
-                    st.markdown(f"**شركة طيران:** {d.get('airline','')}")
+                    st.markdown(f"**Departure:** {d.get('flight_dep_time','')} Airport {d.get('dep_airport','')} - Flight No: **{d.get('flight_no_dep','')}**")
+                    st.markdown(f"**Return:** {d.get('flight_ret_time','')} Airport {d.get('ret_airport','')} - Flight No: **{d.get('flight_no_ret','')}**")
             view_dialog()
-
 with t2:
     st.markdown("## 💰 كشف حساب الوكلاء")
     col_pay1, col_pay2 = st.columns([1,2])
