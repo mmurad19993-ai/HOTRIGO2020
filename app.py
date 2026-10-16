@@ -749,18 +749,6 @@ with t1:
         notes=st.text_input("Note", key="notes")
         airline=st.text_input("Airline (empty=no flight)", key="airline", placeholder="")
         vno=st.text_input("Voucher No", key="vno")
-
-        with st.expander("➕ Show More / باقي المعلومات - المزيد", expanded=False):
-            c_dep, c_ret=st.columns(2)
-            with c_dep: dep_time=st.text_input("Departure Time", key="dep_time", placeholder="10:30")
-            with c_ret: ret_time=st.text_input("Return Time", key="ret_time", placeholder="18:45")
-            c_fno_dep, c_fno_ret = st.columns(2)
-            with c_fno_dep: flight_no_dep=st.text_input("Flight No Dep", key="flight_no_dep", placeholder="TK2026")
-            with c_fno_ret: flight_no_ret=st.text_input("Flight No Ret", key="flight_no_ret", placeholder="TK2027")
-            c_air_dep, c_air_ret = st.columns(2)
-            with c_air_dep: dep_airport=st.text_input("Departure Airport", key="dep_airport", placeholder="IST")
-            with c_air_ret: ret_airport=st.text_input("Return Airport", key="ret_airport", placeholder="BEY")
-            transport_co=st.text_input("Transport Company (empty=no transfer)", key="transport_co", placeholder="")
     with c_small:
         with st.expander("➕ Show More / باقي المعلومات - المزيد", expanded=False):
             c_dep, c_ret=st.columns(2)
