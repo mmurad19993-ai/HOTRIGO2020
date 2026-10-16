@@ -1266,15 +1266,26 @@ if pay_agent:
             st.download_button("📥 Download PDF",st.session_state[f"pdf_data_add_{pay_agent}"],file_name=f"HOTRIGO_{pay_agent}_statement.pdf",mime="application/pdf",use_container_width=True,key=f"dl_pdf_add_{pay_agent}")
     with r1_c3:
         st.write("")
-        from io import BytesIO
-        output=BytesIO()
-        conn=sqlite3.connect(DB)
-        df_pays_excel=pd.read_sql("SELECT pay_date as Date,amount as Amount,note as Note FROM agent_payments WHERE agent=? ORDER BY pay_date",conn,params=(pay_agent,))
-        conn.close()
-        with pd.ExcelWriter(output,engine='openpyxl') as writer:
-            df_display.to_excel(writer,index=False,sheet_name="Bookings")
-            df_pays_excel.to_excel(writer,index=False,sheet_name="Payments")
-        st.download_button("📊 Export Excel",output.getvalue(),file_name=f"HOTRIGO_{pay_agent}_statement.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",use_container_width=True,key=f"dl_excel_add_{pay_agent}")
+        try:
+            from io import BytesIO
+            output=BytesIO()
+            conn=sqlite3.connect(DB)
+            df_pays_excel=pd.read_sql("SELECT pay_date as Date,amount as Amount,note as Note FROM agent_payments WHERE agent=? ORDER BY pay_date",conn,params=(pay_agent,))
+            conn.close()
+            if pay_agent!=view_agent:
+                conn=sqlite3.connect(DB)
+                df_raw_excel=pd.read_sql("SELECT * FROM bookings WHERE company=?",conn,params=(pay_agent,))
+                conn.close()
+                df_excel_source=build_statement(df_raw_excel.copy()) if not df_raw_excel.empty else df_display
+            else:
+                df_excel_source=df_display
+            with pd.ExcelWriter(output,engine='openpyxl') as writer:
+                if not df_excel_source.empty:
+                    df_excel_source.to_excel(writer,index=False,sheet_name="Bookings")
+                df_pays_excel.to_excel(writer,index=False,sheet_name="Payments")
+            st.download_button("📊 Export Excel",output.getvalue(),file_name=f"HOTRIGO_{pay_agent}_statement.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",use_container_width=True,key=f"dl_excel_add_{pay_agent}")
+        except Exception as e:
+            st.error(f"Excel Error: {e}")
 pay_date=st.date_input("Payment Date",datetime.now(),key=f"pay_date_{view_agent}")
 pay_amount=st.text_input("Amount $",key=f"pay_amount_{view_agent}")
 pay_note=st.text_input("Note",key=f"pay_note_{view_agent}",placeholder="Bank transfer - Cash...")
