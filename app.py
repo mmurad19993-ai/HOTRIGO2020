@@ -1219,14 +1219,13 @@ with t2:
                     except Exception as e:
                         st.error(f"DB Error: {e}")
 
-            # تحضير الملفات فورا - كبسة وحدة
             try:
                 pdf_bytes = generate_pdf_bytes(pay_agent)
             except:
                 pdf_bytes = None
             try:
                 excel_bytes = generate_excel_bytes(pay_agent)
-            except Exception as e:
+            except:
                 excel_bytes = None
 
             b1, b2 = st.columns(2, gap="small")
@@ -1238,29 +1237,9 @@ with t2:
             with b2:
                 if excel_bytes:
                     st.download_button("📊 Export Excel", data=excel_bytes, file_name=f"HOTRIGO_{pay_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_excel_one_{pay_agent}")
-                else:
-                    st.button("📊 Export Excel", disabled=True, use_container_width=True)
 
     with right_side:
-        st.markdown(f"#### Statement for {pay_agent}")
-        conn=sqlite3.connect(DB)
-        df_pays=pd.read_sql("SELECT pay_date as Date, amount as Amount, note as Note FROM agent_payments WHERE agent=? ORDER BY pay_date DESC", conn, params=(pay_agent,))
-        df_books=pd.read_sql("SELECT * FROM bookings WHERE company=?", conn, params=(pay_agent,))
-        conn.close()
-        if not df_books.empty:
-            for c in df_books.columns:
-                if 'sell' in c.lower() or 'price' in c.lower():
-                    total_sell_r = df_books[c].apply(to_f_local).sum(); break
-            else: total_sell_r=0
-        else: total_sell_r=0
-        total_paid_r = df_pays['Amount'].sum() if not df_pays.empty else 0
-        c1,c2,c3 = st.columns(3)
-        c1.metric("Total Sales", f"${total_sell_r:.2f}")
-        c2.metric("Total Paid", f"${total_paid_r:.2f}")
-        c3.metric("Balance", f"${total_sell_r - total_paid_r:.2f}")
-        if not df_pays.empty:
-            st.dataframe(df_pays, use_container_width=True, hide_index=True)
-
+        # === فوق : Agents Summary ===
         st.markdown("#### 💰 Agents Summary")
         try:
             conn=sqlite3.connect(DB)
@@ -1279,12 +1258,34 @@ with t2:
                 summary.append({"Agent":ag, "Sales":total_sales, "Paid":total_paid, "Balance":total_sales-total_paid})
             df_summary=pd.DataFrame(summary)
             if not df_summary.empty:
-                st.dataframe(df_summary.style.format({"Sales":"${:.2f}","Paid":"${:.2f}","Balance":"${:.2f}"}), use_container_width=True, height=420)
+                st.dataframe(df_summary.style.format({"Sales":"${:.2f}","Paid":"${:.2f}","Balance":"${:.2f}"}), use_container_width=True, height=250)
                 st.markdown(f"""<div style="background:#0d47a1;color:white;padding:10px;border-radius:8px;text-align:center">
                 Sales: ${df_summary['Sales'].sum():.2f} | Paid: ${df_summary['Paid'].sum():.2f} | Due: ${df_summary['Balance'].sum():.2f}
                 </div>""", unsafe_allow_html=True)
         except Exception as e:
             st.error(f"Summary Error: {e}")
+
+        st.divider()
+
+        # === تحت : Statement for AHMAD ===
+        st.markdown(f"#### Statement for {pay_agent}")
+        conn=sqlite3.connect(DB)
+        df_pays=pd.read_sql("SELECT pay_date as Date, amount as Amount, note as Note FROM agent_payments WHERE agent=? ORDER BY pay_date DESC", conn, params=(pay_agent,))
+        df_books=pd.read_sql("SELECT * FROM bookings WHERE company=?", conn, params=(pay_agent,))
+        conn.close()
+        if not df_books.empty:
+            for c in df_books.columns:
+                if 'sell' in c.lower() or 'price' in c.lower():
+                    total_sell_r = df_books[c].apply(to_f_local).sum(); break
+            else: total_sell_r=0
+        else: total_sell_r=0
+        total_paid_r = df_pays['Amount'].sum() if not df_pays.empty else 0
+        c1,c2,c3 = st.columns(3)
+        c1.metric("Total Sales", f"${total_sell_r:.2f}")
+        c2.metric("Total Paid", f"${total_paid_r:.2f}")
+        c3.metric("Balance", f"${total_sell_r - total_paid_r:.2f}")
+        if not df_pays.empty:
+            st.dataframe(df_pays, use_container_width=True, hide_index=True)
 with t3:
     conn = sqlite3.connect(DB)
     conn.execute("CREATE TABLE IF NOT EXISTS agents (name TEXT PRIMARY KEY)")
