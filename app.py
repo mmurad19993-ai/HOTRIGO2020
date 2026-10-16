@@ -1213,6 +1213,12 @@ with t3:
         color: white !important;
         font-weight: 800 !important;
         border: 1px solid #000 !important;
+        opacity: 1 !important;
+    }
+    div[data-testid="stContainer"] div[data-testid="stButton"]:last-child > button:disabled {
+        background-color: #1a1a1a !important;
+        color: white !important;
+        opacity: 1 !important;
     }
     div[data-testid="stContainer"] div[data-testid="stButton"]:last-child > button:hover {
         background-color: #000 !important;
