@@ -1125,10 +1125,15 @@ with t2:
 
         nights_final = df['nights'] if 'nights' in df.columns else df['nights_calc']
 
+        def clean_passengers(x):
+            if not x: return ""
+            parts = [p.strip() for p in str(x).replace(',', '\n').split('\n') if p.strip()]
+            return ", ".join(parts)
+
         out = pd.DataFrame()
         out["Booking ID"] = df['id'] if 'id' in df.columns else range(1, len(df)+1)
         out["Agent Name"] = df['company']
-        out["Passenger Names"] = df['passengers']
+        out["Passenger Names"] = df['passengers'].apply(clean_passengers)
         out["Pax Count"] = df[pax_col] if pax_col in df.columns else 1
         out["Hotel"] = df['hotel'] if 'hotel' in df.columns else ""
         out["Rooms"] = df[room_col] if room_col and room_col in df.columns else 1
