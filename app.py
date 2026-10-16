@@ -740,7 +740,7 @@ with t1:
         try: room_count_val=int(room_count) if room_count.strip()!="" else 0
         except: room_count_val=0
         rc_for_calc = room_count_val if room_count_val > 0 else 1
-            cost_total = (pn * nights_val * rc_for_calc) + fl + tr
+        cost_total = (pn * nights_val * rc_for_calc) + fl + tr
     if cost_total > 0:
         st.caption(f"💰 الكوست صار علينا: ${cost_total:,.2f}")
 
