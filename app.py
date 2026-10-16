@@ -1251,6 +1251,7 @@ with t2:
             except Exception as e:
                 st.error(f"PDF Error: {e}")
 
+        top_btn1, top_btn2 = st.columns(2)
     with top_btn1:
         if st.button("🖨️ Print PDF", use_container_width=True, key=f"btn_pdf_top_{view_agent}"):
             try:
@@ -1290,16 +1291,19 @@ with t2:
                 pdf.set_font("Arial", "B", 8)
                 pdf.set_fill_color(13, 71, 161)
                 pdf.set_text_color(255,255,255)
-                for i, col in enumerate(cols): pdf.cell(col_widths[i], 9, col, border=1, align='C', fill=True)
+                for i, col in enumerate(cols): 
+                    pdf.cell(col_widths[i], 9, col, border=1, align='C', fill=True)
                 pdf.ln()
                 pdf.set_font("Arial", "", 7.5)
                 pdf.set_text_color(30,30,30)
                 fill=False
                 for _, row in df_pdf.iterrows():
                     if pdf.get_y()>180: pdf.add_page()
-                    pdf.set_fill_color(232,240,255) if fill else pdf.set_fill_color(255,255,255)
+                    if fill: pdf.set_fill_color(232,240,255)
+                    else: pdf.set_fill_color(255,255,255)
                     vals=[str(row["Booking ID"]), str(row["Passenger Names"])[:45], str(row["Pax Count"]), str(row["Hotel"])[:22], str(row["Rooms"]), str(row["Check-in"]), str(row["Check-out"]), str(row["Nights"]), str(row["Sell Price"])[:15], str(row["Note"])[:25]]
-                    for j,val in enumerate(vals): pdf.cell(col_widths[j], 8, val, border=1, align='C', fill=True)
+                    for j,val in enumerate(vals): 
+                        pdf.cell(col_widths[j], 8, val, border=1, align='C', fill=True)
                     pdf.ln(); fill=not fill
                 if not df_pays_pdf.empty:
                     pdf.ln(8)
@@ -1320,7 +1324,7 @@ with t2:
                         pdf.ln()
                 buf = BytesIO()
                 pdf.output(buf)
-                st.download_button("📥 Download PDF", buf.getvalue(), file_name=f"HOTRIGO_{view_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key=f"dl_pdf_{view_agent}")
+                st.download_button("📥 Download PDF", buf.getvalue(), file_name=f"HOTRIGO_{view_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key=f"dl_pdf_final_{view_agent}")
             except Exception as e:
                 st.error(f"PDF Error: {e}")
 
@@ -1333,9 +1337,9 @@ with t2:
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df_display.to_excel(writer, index=False, sheet_name="Bookings")
             df_pays_excel.to_excel(writer, index=False, sheet_name="Payments")
-        st.download_button("📊 Export Excel", output.getvalue(), file_name=f"HOTRIGO_{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_excel_{view_agent}")
+        st.download_button("📊 Export Excel", output.getvalue(), file_name=f"HOTRIGO_{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_excel_final_{view_agent}")
 
-    # ===== حجوزات احمد =====
+    # ===== حجوزات احمد - من الشيت =====
     st.markdown(f"### 📋 حجوزات {view_agent}")
     st.dataframe(df_display, use_container_width=True, hide_index=True)
 
@@ -1344,8 +1348,8 @@ with t2:
     df_pays_show = pd.read_sql("SELECT pay_date as Date, amount as Amount, note as Note FROM agent_payments WHERE agent=? ORDER BY pay_date DESC", conn, params=(view_agent,))
     try:
         total_sales_show = float(pd.read_sql("SELECT COALESCE(SUM(sell),0) FROM bookings WHERE company=?", conn, params=(view_agent,)).iloc[0,0])
-        if total_sales_show == 0:
-            total_sales_show = df_display['Sell Price'].apply(lambda x: to_f(str(x))).sum() if 'Sell Price' in df_display.columns else 0
+        if total_sales_show == 0 and 'Sell Price' in df_display.columns:
+            total_sales_show = df_display['Sell Price'].apply(lambda x: to_f(str(x)) if str(x).strip() else 0).sum()
     except:
         total_sales_show = 0
     total_paid_show = pd.read_sql("SELECT COALESCE(SUM(amount),0) FROM agent_payments WHERE agent=?", conn, params=(view_agent,)).iloc[0,0]
@@ -1372,13 +1376,14 @@ with t2:
         conn=sqlite3.connect(DB)
         agents_list=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]
         conn.close()
-        pay_agent = st.selectbox("اختر الوكيل", agents_list, key="pay_agent_final_fixed", index=agents_list.index(view_agent) if view_agent in agents_list else 0)
-        pay_date = st.date_input("تاريخ الدفعة", datetime.now(), key="pay_date_final_fixed")
-        pay_amount = st.text_input("المبلغ $", key="pay_amount_final_fixed")
-        pay_note = st.text_input("ملاحظة", key="pay_note_final_fixed", placeholder="تحويل بنكي - كاش...")
-        if st.button("اضافة دفعة", type="primary", use_container_width=True, key="btn_add_pay_fixed"):
+        pay_agent = st.selectbox("اختر الوكيل", agents_list, key=f"pay_agent_{view_agent}", index=agents_list.index(view_agent) if view_agent in agents_list else 0)
+        pay_date = st.date_input("تاريخ الدفعة", datetime.now(), key=f"pay_date_{view_agent}")
+        pay_amount = st.text_input("المبلغ $", key=f"pay_amount_{view_agent}")
+        pay_note = st.text_input("ملاحظة", key=f"pay_note_{view_agent}", placeholder="تحويل بنكي - كاش...")
+        if st.button("اضافة دفعة", type="primary", use_container_width=True, key=f"btn_add_pay_{view_agent}"):
             amt = to_f(pay_amount)
-            if not pay_agent or amt<=0: st.error("اختر وكيل ومبلغ صحيح")
+            if not pay_agent or amt<=0: 
+                st.error("اختر وكيل ومبلغ صحيح")
             else:
                 conn=sqlite3.connect(DB)
                 conn.execute("INSERT INTO agent_payments (agent, pay_date, amount, note) VALUES (?,?,?,?)", (pay_agent, str(pay_date), amt, pay_note))
@@ -1398,27 +1403,31 @@ with t3:
         st.markdown("#### Agents")
         na=st.text_input("New Agent", key="na")
         if st.button("Add Agent", key="add_agent"):
-            if na.strip(): conn=sqlite3.connect(DB); conn.execute("INSERT OR IGNORE INTO agents VALUES (?)",(na.strip().upper(),)); conn.commit(); conn.close(); st.rerun()
+            if na.strip(): 
+                conn=sqlite3.connect(DB); conn.execute("INSERT OR IGNORE INTO agents VALUES (?)",(na.strip().upper(),)); conn.commit(); conn.close(); st.rerun()
         conn=sqlite3.connect(DB); agents_df=pd.read_sql("SELECT name FROM agents ORDER BY name", conn); conn.close()
         st.dataframe(agents_df, use_container_width=True, height=400)
     with c2:
         st.markdown("#### Hotels")
         nh=st.text_input("New Hotel", key="nh")
         if st.button("Add Hotel", key="add_hotel"):
-            if nh.strip(): conn=sqlite3.connect(DB); conn.execute("INSERT OR IGNORE INTO hotels VALUES (?)",(nh.strip().upper(),)); conn.commit(); conn.close(); st.rerun()
+            if nh.strip(): 
+                conn=sqlite3.connect(DB); conn.execute("INSERT OR IGNORE INTO hotels VALUES (?)",(nh.strip().upper(),)); conn.commit(); conn.close(); st.rerun()
         conn=sqlite3.connect(DB); hotels_df=pd.read_sql("SELECT name FROM hotels ORDER BY name", conn); conn.close()
         st.dataframe(hotels_df, use_container_width=True, height=400)
     with c3:
         st.markdown("#### Airlines")
         nal=st.text_input("New Airline", key="nal")
         if st.button("Add Airline", key="add_airline"):
-            if nal.strip(): conn=sqlite3.connect(DB); conn.execute("INSERT OR IGNORE INTO airlines VALUES (?)",(nal.strip().upper(),)); conn.commit(); conn.close(); st.rerun()
+            if nal.strip(): 
+                conn=sqlite3.connect(DB); conn.execute("INSERT OR IGNORE INTO airlines VALUES (?)",(nal.strip().upper(),)); conn.commit(); conn.close(); st.rerun()
         conn=sqlite3.connect(DB); airlines_df=pd.read_sql("SELECT name FROM airlines ORDER BY name", conn); conn.close()
         st.dataframe(airlines_df, use_container_width=True, height=400)
     with c4:
         st.markdown("#### Transport")
         ntr=st.text_input("New Transport Co", key="ntr")
         if st.button("Add Transport Co", key="add_transport"):
-            if ntr.strip(): conn=sqlite3.connect(DB); conn.execute("INSERT OR IGNORE INTO transport_companies VALUES (?)",(ntr.strip().upper(),)); conn.commit(); conn.close(); st.rerun()
+            if ntr.strip(): 
+                conn=sqlite3.connect(DB); conn.execute("INSERT OR IGNORE INTO transport_companies VALUES (?)",(ntr.strip().upper(),)); conn.commit(); conn.close(); st.rerun()
         conn=sqlite3.connect(DB); transport_df=pd.read_sql("SELECT name FROM transport_companies ORDER BY name", conn); conn.close()
         st.dataframe(transport_df, use_container_width=True, height=400)
