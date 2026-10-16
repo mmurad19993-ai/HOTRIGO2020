@@ -679,7 +679,19 @@ with t1:
         emp=st.text_input("Sales Employee *", key="emp")
         comp=st.text_input("Agent *", key="comp", placeholder="")
         pax_count=st.text_input("Number of Persons", value="1", key="pax_count", placeholder="e.g. 2")
-        pas=st.text_area("Passengers *", height=90, key="pas", placeholder="One name per line")
+        try:
+            pax_num = int(pax_count) if pax_count.strip()!="" else 1
+        except:
+            pax_num = 1
+        pax_num = max(1, min(pax_num, 20))
+
+        passenger_list = []
+        for i in range(pax_num):
+            name = st.text_input(f"Passenger {i+1} *", key=f"pas_{i}", placeholder=f"Name {i+1}")
+            passenger_list.append(name)
+
+        pas = "\n".join([n for n in passenger_list if n.strip()!=""])
+        
         room_type=st.text_input("Room Type *", key="room_type", placeholder="SNG - DBL - TRP")
         room_count=st.text_input("Number of Rooms", value="", key="room_count", placeholder="e.g. 1 or leave empty for 0")
         hotel=st.text_input("Hotel *", key="hotel", placeholder="")
