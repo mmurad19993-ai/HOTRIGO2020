@@ -735,9 +735,6 @@ with t1:
         tr_s=st.text_input("Transport $", key="tr")
         sell_s=st.text_input("Selling Price $ *", key="sell")
         pn=to_f(pn_s); fl=to_f(fl_s); tr=to_f(tr_s); sell=to_f(sell_s)
-        notes=st.text_input("Note", key="notes")
-        airline=st.text_input("Airline (empty=no flight)", key="airline", placeholder="")
-        vno=st.text_input("Voucher No", key="vno")
         try: pax_count_val=int(pax_count)
         except: pax_count_val=1
         try: room_count_val=int(room_count) if room_count.strip()!="" else 0
@@ -747,6 +744,9 @@ with t1:
         if cost_total > 0:
             st.caption(f"💰 الكوست صار علينا: ${cost_total:,.2f}")
         c_dep, c_ret=st.columns(2)
+        notes=st.text_input("Note", key="notes")
+        airline=st.text_input("Airline (empty=no flight)", key="airline", placeholder="")
+        vno=st.text_input("Voucher No", key="vno")
         with c_dep: dep_time=st.text_input("Departure Time", key="dep_time", placeholder="10:30")
         with c_ret: ret_time=st.text_input("Return Time", key="ret_time", placeholder="18:45")
         c_fno_dep, c_fno_ret = st.columns(2)
