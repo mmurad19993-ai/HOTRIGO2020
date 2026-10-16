@@ -1219,7 +1219,7 @@ with t3:
     with c1:
         with st.container(border=True):
             st.markdown("#### 👥 Agents")
-            na = st.text_input("Agent", key="na_4col", placeholder="Agent name...", label_visibility="collapsed")
+            na = st.text_input("", key="na_4col", placeholder="Agent name...", label_visibility="collapsed")
             if st.button("Add Agent", key="add_a_4col", use_container_width=True) and na.strip():
                 conn=sqlite3.connect(DB)
                 try: conn.execute("INSERT INTO agents (name) VALUES (?)", (na.strip().upper(),)); conn.commit()
@@ -1228,14 +1228,14 @@ with t3:
             conn=sqlite3.connect(DB); dfa=pd.read_sql("SELECT name as Agents FROM agents ORDER BY name", conn); conn.close()
             st.dataframe(dfa, use_container_width=True, height=250, hide_index=True)
             if not dfa.empty:
-                da=st.selectbox("Del", dfa['Agents'].tolist(), key="del_a_4col", label_visibility="collapsed")
+                da=st.selectbox("", dfa['Agents'].tolist(), key="del_a_4col", label_visibility="collapsed", placeholder="Select...")
                 if st.button("🗑️ Delete", key="delb_a_4col", use_container_width=True):
                     conn=sqlite3.connect(DB); conn.execute("DELETE FROM agents WHERE name=?", (da,)); conn.commit(); conn.close(); st.rerun()
 
     with c2:
         with st.container(border=True):
             st.markdown("#### 🏨 Hotels")
-            nh = st.text_input("Hotel", key="nh_4col", placeholder="Hotel name...", label_visibility="collapsed")
+            nh = st.text_input("", key="nh_4col", placeholder="Hotel name...", label_visibility="collapsed")
             if st.button("Add Hotel", key="add_h_4col", use_container_width=True) and nh.strip():
                 conn=sqlite3.connect(DB)
                 try: conn.execute("INSERT INTO hotels (name) VALUES (?)", (nh.strip(),)); conn.commit()
@@ -1244,14 +1244,14 @@ with t3:
             conn=sqlite3.connect(DB); dfh=pd.read_sql("SELECT name as Hotels FROM hotels ORDER BY name", conn); conn.close()
             st.dataframe(dfh, use_container_width=True, height=250, hide_index=True)
             if not dfh.empty:
-                dh=st.selectbox("Del", dfh['Hotels'].tolist(), key="del_h_4col", label_visibility="collapsed")
+                dh=st.selectbox("", dfh['Hotels'].tolist(), key="del_h_4col", label_visibility="collapsed", placeholder="Select...")
                 if st.button("🗑️ Delete", key="delb_h_4col", use_container_width=True):
                     conn=sqlite3.connect(DB); conn.execute("DELETE FROM hotels WHERE name=?", (dh,)); conn.commit(); conn.close(); st.rerun()
 
     with c3:
         with st.container(border=True):
             st.markdown("#### ✈️ Airlines")
-            nal = st.text_input("Airline", key="nal_4col", placeholder="e.g. Turkish Airlines", label_visibility="collapsed")
+            nal = st.text_input("", key="nal_4col", placeholder="e.g. Turkish Airlines", label_visibility="collapsed")
             if st.button("Add Airline", key="add_al_4col", use_container_width=True) and nal.strip():
                 conn=sqlite3.connect(DB)
                 try: conn.execute("INSERT INTO airlines (name) VALUES (?)", (nal.strip(),)); conn.commit()
@@ -1260,14 +1260,14 @@ with t3:
             conn=sqlite3.connect(DB); dfal=pd.read_sql("SELECT name as Airlines FROM airlines ORDER BY name", conn); conn.close()
             st.dataframe(dfal, use_container_width=True, height=250, hide_index=True)
             if not dfal.empty:
-                dal=st.selectbox("", dfal['Airlines'].tolist(), key="del_al_4col", label_visibility="collapsed", placeholder="Select airline to delete...")
+                dal=st.selectbox("", dfal['Airlines'].tolist(), key="del_al_4col", label_visibility="collapsed", placeholder="Select...")
                 if st.button("🗑️ Delete", key="delb_al_4col", use_container_width=True):
                     conn=sqlite3.connect(DB); conn.execute("DELETE FROM airlines WHERE name=?", (dal,)); conn.commit(); conn.close(); st.rerun()
 
     with c4:
         with st.container(border=True):
             st.markdown("#### 🚌 Transport")
-            nt = st.text_input("Transport", key="nt_4col", placeholder="e.g. Metro Turizm", label_visibility="collapsed")
+            nt = st.text_input("", key="nt_4col", placeholder="e.g. Metro Turizm", label_visibility="collapsed")
             if st.button("Add Transport", key="add_t_4col", use_container_width=True) and nt.strip():
                 conn=sqlite3.connect(DB)
                 try: conn.execute("INSERT INTO transport_companies (name) VALUES (?)", (nt.strip(),)); conn.commit()
@@ -1276,6 +1276,6 @@ with t3:
             conn=sqlite3.connect(DB); dft=pd.read_sql("SELECT name as Transport FROM transport_companies ORDER BY name", conn); conn.close()
             st.dataframe(dft, use_container_width=True, height=250, hide_index=True)
             if not dft.empty:
-                dt=st.selectbox("", dft['Transport'].tolist(), key="del_t_4col", label_visibility="collapsed", placeholder="Select transport to delete...")
+                dt=st.selectbox("", dft['Transport'].tolist(), key="del_t_4col", label_visibility="collapsed", placeholder="Select...")
                 if st.button("🗑️ Delete", key="delb_t_4col", use_container_width=True):
                     conn=sqlite3.connect(DB); conn.execute("DELETE FROM transport_companies WHERE name=?", (dt,)); conn.commit(); conn.close(); st.rerun()
