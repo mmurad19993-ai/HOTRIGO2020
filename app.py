@@ -1146,15 +1146,15 @@ with t2:
 
     df_display = build_statement(df_raw.copy())
 
-    with c2:
-        if st.button("🖨️ Print PDF", use_container_width=True, key=f"btn_pdf_{view_agent}"):
+    # ===== الازرار فوق =====
+    top_btn1, top_btn2 = st.columns(2)
+    with top_btn1:
+        if st.button("🖨️ Print PDF", use_container_width=True, key=f"btn_pdf_top_{view_agent}"):
             try:
                 from fpdf import FPDF
                 from io import BytesIO
                 from datetime import datetime
                 import sqlite3
-
-                # جيب الدفعات
                 conn=sqlite3.connect(DB)
                 df_pays_pdf = pd.read_sql("SELECT pay_date, amount, note FROM agent_payments WHERE agent=? ORDER BY pay_date", conn, params=(view_agent,))
                 total_paid_pdf = df_pays_pdf['amount'].sum() if not df_pays_pdf.empty else 0
@@ -1177,7 +1177,7 @@ with t2:
                         self.set_y(-15)
                         self.set_font("Arial", "I", 7)
                         self.set_text_color(150,150,150)
-                        self.cell(0, 10, f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')} | HOTRIGO - {view_agent}", align='C')
+                        self.cell(0, 10, f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')} | HOTRIGO - {view_agent}", align='C')
 
                 pdf = PDF(orientation='L', unit='mm', format='A4')
                 pdf.set_auto_page_break(auto=True, margin=20)
@@ -1186,7 +1186,6 @@ with t2:
                 pdf.cell(0, 10, f"Agent Statement - {view_agent}", ln=True, align='C')
                 pdf.ln(4)
 
-                # Bookings Table
                 df_pdf = df_display[["Booking ID","Passenger Names","Pax Count","Hotel","Rooms","Check-in","Check-out","Nights","Sell Price","Note"]].copy()
                 cols = ["Booking ID", "Passenger Names", "Pax", "Hotel", "Rooms", "Check-in", "Check-out", "Nights", "Sell Price", "Note"]
                 col_widths = [22, 55, 10, 40, 12, 22, 22, 12, 22, 35]
@@ -1198,8 +1197,7 @@ with t2:
                 pdf.ln()
                 pdf.set_font("Arial", "", 7.5)
                 pdf.set_text_color(30,30,30)
-                fill=False
-                total_sell=0
+                fill=False; total_sell=0
                 for _, row in df_pdf.iterrows():
                     if pdf.get_y()>180: pdf.add_page()
                     pdf.set_fill_color(232,240,255) if fill else pdf.set_fill_color(255,255,255)
@@ -1210,8 +1208,7 @@ with t2:
                     except: sell_str=str(row['Sell Price'])
                     vals=[str(row["Booking ID"]), str(row["Passenger Names"])[:45], str(row["Pax Count"]), str(row["Hotel"])[:22], str(row["Rooms"]), str(row["Check-in"]), str(row["Check-out"]), str(row["Nights"]), sell_str, str(row["Note"])[:25]]
                     for j,val in enumerate(vals): pdf.cell(col_widths[j], 8, val, border=1, align='C', fill=True)
-                    pdf.ln()
-                    fill=not fill
+                    pdf.ln(); fill=not fill
 
                 pdf.ln(3)
                 pdf.set_font("Arial", "B", 10)
@@ -1222,21 +1219,18 @@ with t2:
                 pdf.cell(35,10,"", border=1, fill=True)
                 pdf.ln(10)
 
-                # Payments Table - الجديد
                 if not df_pays_pdf.empty:
                     pdf.set_font("Arial", "B", 11)
                     pdf.set_text_color(13,71,161)
                     pdf.cell(0, 8, f"Payment History - {view_agent}", ln=True)
                     pdf.ln(1)
                     pdf.set_font("Arial", "B", 8)
-                    pdf.set_fill_color(0, 150, 64)
-                    pdf.set_text_color(255,255,255)
+                    pdf.set_fill_color(0, 150, 64); pdf.set_text_color(255,255,255)
                     pdf.cell(40, 9, "Date", border=1, align='C', fill=True)
                     pdf.cell(30, 9, "Amount", border=1, align='C', fill=True)
                     pdf.cell(182, 9, "Note", border=1, align='C', fill=True)
                     pdf.ln()
-                    pdf.set_font("Arial", "", 8)
-                    pdf.set_text_color(0,0,0)
+                    pdf.set_font("Arial", "", 8); pdf.set_text_color(0,0,0)
                     fill2=False
                     for _, prow in df_pays_pdf.iterrows():
                         if pdf.get_y()>180: pdf.add_page()
@@ -1244,15 +1238,11 @@ with t2:
                         pdf.cell(40, 8, str(prow['pay_date']), border=1, align='C', fill=True)
                         pdf.cell(30, 8, f"${float(prow['amount']):.2f}", border=1, align='C', fill=True)
                         pdf.cell(182, 8, str(prow['note'])[:80], border=1, align='L', fill=True)
-                        pdf.ln()
-                        fill2=not fill2
+                        pdf.ln(); fill2=not fill2
                     pdf.ln(3)
                     pdf.set_font("Arial", "B", 10)
-                    pdf.cell(40, 10, "", border=0)
                     pdf.set_fill_color(0,150,64); pdf.set_text_color(255,255,255)
-                    pdf.cell(30, 10, f"${float(total_paid_pdf):.2f}", border=1, align='C', fill=True)
-                    pdf.set_fill_color(13,71,161)
-                    pdf.cell(40, 10, f" Balance: ${total_sell - float(total_paid_pdf):.2f}", border=1, align='C', fill=True)
+                    pdf.cell(70, 10, f" Total Paid: ${float(total_paid_pdf):.2f} | Balance: ${total_sell - float(total_paid_pdf):.2f}", border=1, fill=True)
                     pdf.ln()
 
                 pdf_buffer = BytesIO()
@@ -1261,7 +1251,7 @@ with t2:
             except Exception as e:
                 st.error(f"PDF Error: {e}")
 
-    with c3:
+    with top_btn2:
         from io import BytesIO
         from openpyxl.styles import Alignment
         output = BytesIO()
@@ -1277,9 +1267,10 @@ with t2:
             ws.column_dimensions['C'].width = 35
         st.download_button("📊 Export Excel", output.getvalue(), file_name=f"HOTRIGO_{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_excel_{view_agent}")
 
+    # ===== تحتهم الكشوفات =====
+    st.markdown(f"### 📋 حجوزات {view_agent}")
     st.dataframe(df_display, use_container_width=True, hide_index=True)
 
-    # عرض الدفعات بالشاشة
     conn=sqlite3.connect(DB)
     df_pays_show = pd.read_sql("SELECT pay_date as Date, amount as Amount, note as Note FROM agent_payments WHERE agent=? ORDER BY pay_date DESC", conn, params=(view_agent,))
     total_sales_show = pd.read_sql("SELECT COALESCE(SUM(sell),0) FROM bookings WHERE company=?", conn, params=(view_agent,)).iloc[0,0]
@@ -1287,16 +1278,17 @@ with t2:
     conn.close()
 
     if not df_pays_show.empty:
-        st.markdown(f"#### 💰 سجل دفعات {view_agent}")
+        st.markdown(f"### 💰 سجل دفعات {view_agent} - كل دفعة بتاريخها")
         df_pays_show_disp = df_pays_show.copy()
         df_pays_show_disp['Amount'] = df_pays_show_disp['Amount'].apply(lambda x: f"${float(x):.2f}")
         st.dataframe(df_pays_show_disp, use_container_width=True, hide_index=True)
-        k1,k2,k3 = st.columns(3)
-        k1.metric("Total Sales", f"${float(total_sales_show):.2f}")
-        k2.metric("Total Paid", f"${float(total_paid_show):.2f}")
-        k3.metric("Balance Due", f"${float(total_sales_show)-float(total_paid_show):.2f}")
     else:
         st.info(f"لا يوجد دفعات للوكيل {view_agent}")
+
+    k1,k2,k3 = st.columns(3)
+    k1.metric("Total Sales", f"${float(total_sales_show):.2f}")
+    k2.metric("Total Paid", f"${float(total_paid_show):.2f}")
+    k3.metric("Balance Due", f"${float(total_sales_show)-float(total_paid_show):.2f}")
 
     st.divider()
 
@@ -1320,7 +1312,7 @@ with t2:
                 st.success(f"تم اضافة ${amt} للوكيل {pay_agent}")
                 st.rerun()
     with col_pay2:
-        st.markdown("#### ملخص الأرصدة")
+        st.markdown("#### ملخص الأرصدة - كل الوكلاء")
         conn=sqlite3.connect(DB)
         summary2 = pd.read_sql("SELECT b.company as Agent, SUM(b.sell) as Total_Sales, (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Total_Paid, SUM(b.sell) - (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Balance FROM bookings b GROUP BY b.company", conn)
         conn.close()
