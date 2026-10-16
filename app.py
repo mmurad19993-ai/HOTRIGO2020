@@ -725,7 +725,7 @@ with t1:
         room_count=st.text_input("Number of Rooms", value="", key="room_count", placeholder="")
         hotel=st.text_input("Hotel *", key="hotel", placeholder="")
         ed=st.date_input("Check-in Date", datetime.now()+timedelta(days=1), key="ed")
-        nights=st.text_input("Nights", value="", key="nights", placeholder="e.g. 5 or leave empty for 0")
+        nights=st.text_input("Nights", value="", key="nights", placeholder="")
         try: nights_val=int(nights) if nights.strip()!="" else 0
         except: nights_val=0
         xd=ed+timedelta(days=nights_val)
