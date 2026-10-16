@@ -787,12 +787,14 @@ with t1:
             with c_air_ret: ret_airport=st.text_input("Return Airport", key="ret_airport", placeholder="BEY")
             transport_co=st.text_input("Transport Company (empty=no transfer)", key="transport_co", placeholder="")
             else:
-                ht_tot=to_f(pn)*to_f(nights)*to_f(room_count); cost=ht_tot+to_f(fl)+to_f(tr); profit=to_f(sell)-cost
+                ht_tot=to_f(pn)*to_f(nights)*to_f(room_count)
+                cost=ht_tot+to_f(fl)+to_f(tr)
+                profit=to_f(sell)-cost
                 st.session_state["pending"]={"sale_date":str(sd),"entry_date":str(ed),"exit_date":str(xd),"company":comp_full,"passengers":pas.strip(),"hotel":hotel_full,"room_type":room_type.strip(),"room_count":int(to_f(room_count)),"nights":int(to_f(nights)),"price_night":float(to_f(pn)),"hotel_total":float(ht_tot),"flight":float(to_f(fl)),"transport":float(to_f(tr)),"sell":float(to_f(sell)),"cost":float(cost),"profit":float(profit),"voucher":vno,"notes":notes,"airline":airline_full,"emp":emp.strip(),"dep":dep_time.strip(),"ret":ret_time.strip(),"transport_company":transport_full,"fno_dep":flight_no_dep.strip(),"fno_ret":flight_no_ret.strip()}
-            if st.session_state.pending:
-               d=st.session_state.pending
-            st.warning(f"✅ {d['company']} - {d['passengers'].split(chr(10))[0]} | {d['room_count']} Rooms | Sell ${d['sell']:.2f}")
-            c1,c2=st.columns(2)
+            if st.session_state.get("pending"):
+                d=st.session_state["pending"]
+                st.warning(f"✅ {d['company']} - {d['passengers'].split(chr(10))[0]} | {d['room_count']} Rooms | Sell ${d['sell']:.2f}")
+                c1,c2=st.columns(2)
             with c1:
                 if st.button("YES", type="primary", use_container_width=True):
                     conn=sqlite3.connect(DB, check_same_thread=False)
