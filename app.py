@@ -1342,11 +1342,9 @@ with t2:
     # ===== دفعات احمد - كل دفعة بتاريخها من الشيت =====
     conn=sqlite3.connect(DB)
     df_pays_show = pd.read_sql("SELECT pay_date as Date, amount as Amount, note as Note FROM agent_payments WHERE agent=? ORDER BY pay_date DESC", conn, params=(view_agent,))
-    # هون التصحيح: اذا sell فاضي بياخد من df_display
     try:
         total_sales_show = float(pd.read_sql("SELECT COALESCE(SUM(sell),0) FROM bookings WHERE company=?", conn, params=(view_agent,)).iloc[0,0])
         if total_sales_show == 0:
-            # جرب من df_display اذا العمود اسمو Sell Price
             total_sales_show = df_display['Sell Price'].apply(lambda x: to_f(str(x))).sum() if 'Sell Price' in df_display.columns else 0
     except:
         total_sales_show = 0
