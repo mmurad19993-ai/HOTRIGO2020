@@ -1151,24 +1151,119 @@ with t2:
             try:
                 from fpdf import FPDF
                 from io import BytesIO
-                pdf = FPDF(orientation='L', unit='mm', format='A4')
+                from datetime import datetime
+                import sqlite3
+
+                class PDF(FPDF):
+                    def header(self):
+                        self.set_font("Arial", "B", 26)
+                        self.set_text_color(13, 71, 161)
+                        self.cell(0, 14, "HOTRIGO", ln=True, align='C')
+                        self.set_font("Arial", "", 10)
+                        self.set_text_color(90,90,90)
+                        self.cell(0, 5, "Travel Management System", ln=True, align='C')
+                        self.ln(2)
+                        self.set_draw_color(13,71,161)
+                        self.set_line_width(0.8)
+                        self.line(10, self.get_y(), 287, self.get_y())
+                        self.ln(6)
+
+                    def footer(self):
+                        self.set_y(-15)
+                        self.set_font("Arial", "I", 7)
+                        self.set_text_color(150,150,150)
+                        self.cell(0, 10, f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')} | HOTRIGO System - {view_agent}", align='C')
+
+                pdf = PDF(orientation='L', unit='mm', format='A4')
+                pdf.set_auto_page_break(auto=True, margin=20)
                 pdf.add_page()
-                pdf.set_font("Arial", "B", 11)
+
+                # Title
+                pdf.set_font("Arial", "B", 14)
+                pdf.set_text_color(0,0,0)
                 pdf.cell(0, 10, f"Agent Statement - {view_agent}", ln=True, align='C')
-                pdf.ln(2)
-                pdf.set_font("Arial", "B", 5.5)
-                col_w = 25
-                for col_name in df_display.columns:
-                    pdf.cell(col_w, 7, str(col_name)[:20], border=1, align='C')
+                pdf.set_font("Arial", "", 9)
+                pdf.set_text_color(80,80,80)
+                pdf.cell(0, 5, f"Total Records: {len(df_display)}", ln=True, align='C')
+                pdf.ln(4)
+
+                # Prepare data - only important columns
+                df_pdf = df_display[["Booking ID","Passenger Names","Pax Count","Hotel","Rooms","Check-in","Check-out","Nights","Sell Price","Note"]].copy()
+                cols = ["Booking ID", "Passenger Names", "Pax", "Hotel", "Rooms", "Check-in", "Check-out", "Nights", "Sell Price", "Note"]
+                col_widths = [22, 55, 10, 40, 12, 22, 22, 12, 22, 35]
+
+                # Header
+                pdf.set_font("Arial", "B", 8)
+                pdf.set_fill_color(13, 71, 161)
+                pdf.set_text_color(255,255,255)
+                for i, col in enumerate(cols):
+                    pdf.cell(col_widths[i], 9, col, border=1, align='C', fill=True)
                 pdf.ln()
-                pdf.set_font("Arial", "", 5.5)
-                for _, r in df_display.iterrows():
-                    for val in r:
-                        pdf.cell(col_w, 6, str(val)[:25], border=1)
+
+                # Rows
+                pdf.set_font("Arial", "", 7.5)
+                pdf.set_text_color(30,30,30)
+                fill = False
+                total_sell = 0
+                for _, row in df_pdf.iterrows():
+                    if pdf.get_y() > 180:
+                        pdf.add_page()
+                    if fill:
+                        pdf.set_fill_color(232, 240, 255)
+                    else:
+                        pdf.set_fill_color(255,255,255)
+
+                    try:
+                        sell_val = float(str(row['Sell Price']).replace('$','').replace(',','') or 0)
+                        total_sell += sell_val
+                        sell_str = f"${sell_val:.2f}"
+                    except:
+                        sell_str = str(row['Sell Price'])
+
+                    vals = [
+                        str(row["Booking ID"]),
+                        str(row["Passenger Names"])[:45],
+                        str(row["Pax Count"]),
+                        str(row["Hotel"])[:22],
+                        str(row["Rooms"]),
+                        str(row["Check-in"]),
+                        str(row["Check-out"]),
+                        str(row["Nights"]),
+                        sell_str,
+                        str(row["Note"])[:25]
+                    ]
+                    for j, val in enumerate(vals):
+                        pdf.cell(col_widths[j], 8, val, border=1, align='C', fill=True)
                     pdf.ln()
+                    fill = not fill
+
+                # Totals
+                pdf.ln(3)
+                pdf.set_font("Arial", "B", 10)
+                pdf.set_fill_color(13, 71, 161)
+                pdf.set_text_color(255,255,255)
+                pdf.cell(195, 10, " TOTAL SALES", border=1, align='L', fill=True)
+                pdf.set_fill_color(255, 235, 59)
+                pdf.set_text_color(0,0,0)
+                pdf.cell(22, 10, f"${total_sell:.2f}", border=1, align='C', fill=True)
+                pdf.cell(35, 10, "", border=1, fill=True)
+                pdf.ln()
+
+                try:
+                    conn=sqlite3.connect(DB)
+                    paid = conn.execute("SELECT COALESCE(SUM(amount),0) FROM agent_payments WHERE agent=?", (view_agent,)).fetchone()[0]
+                    conn.close()
+                    balance = total_sell - float(paid)
+                    pdf.ln(3)
+                    pdf.set_font("Arial", "B", 9)
+                    pdf.set_text_color(0,0,0)
+                    pdf.cell(0, 6, f"Total Paid: ${float(paid):.2f} | Balance Due: ${balance:.2f}", align='R')
+                except:
+                    pass
+
                 pdf_buffer = BytesIO()
                 pdf.output(pdf_buffer)
-                st.download_button("📥 Download PDF", pdf_buffer.getvalue(), file_name=f"{view_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key=f"dl_pdf_{view_agent}")
+                st.download_button("📥 Download PDF", pdf_buffer.getvalue(), file_name=f"HOTRIGO_{view_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key=f"dl_pdf_{view_agent}")
             except Exception as e:
                 st.error(f"PDF Error: {e}")
 
@@ -1183,7 +1278,7 @@ with t2:
                 for cell in row:
                     cell.alignment = Alignment(wrap_text=True, vertical='top')
             ws.column_dimensions['C'].width = 35
-        st.download_button("📊 Export Excel", output.getvalue(), file_name=f"{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_excel_{view_agent}")
+        st.download_button("📊 Export Excel", output.getvalue(), file_name=f"HOTRIGO_{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_excel_{view_agent}")
 
     st.dataframe(df_display, use_container_width=True, hide_index=True)
     st.divider()
