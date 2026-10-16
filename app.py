@@ -722,7 +722,7 @@ with t1:
         
         
         room_type=st.text_input("Room Type *", key="room_type", placeholder="SNG - DBL - TRP")
-        room_count=st.text_input("Number of Rooms", value="", key="room_count", placeholder="e.g. 1 or leave empty for 0")
+        room_count=st.text_input("Number of Rooms", value="", key="room_count", placeholder="")
         hotel=st.text_input("Hotel *", key="hotel", placeholder="")
         ed=st.date_input("Check-in Date", datetime.now()+timedelta(days=1), key="ed")
         nights=st.text_input("Nights", value="", key="nights", placeholder="e.g. 5 or leave empty for 0")
