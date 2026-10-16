@@ -1228,9 +1228,12 @@ with t3:
             conn=sqlite3.connect(DB); dfa=pd.read_sql("SELECT name as Agents FROM agents ORDER BY name", conn); conn.close()
             st.dataframe(dfa, use_container_width=True, height=250, hide_index=True)
             if not dfa.empty:
-                da=st.selectbox("", dfa['Agents'].tolist(), key="del_a_4col", label_visibility="collapsed", placeholder="Select...")
-                if st.button("🗑️ Delete", key="delb_a_4col", use_container_width=True):
+                da=st.selectbox("", dfa['Agents'].tolist(), key="del_a_4col", label_visibility="collapsed")
+                if st.button("Delete", key="delb_a_4col", use_container_width=True):
                     conn=sqlite3.connect(DB); conn.execute("DELETE FROM agents WHERE name=?", (da,)); conn.commit(); conn.close(); st.rerun()
+            else:
+                st.selectbox("", ["empty"], key="del_a_4col_e", label_visibility="collapsed", disabled=True)
+                st.button("Delete", key="delb_a_4col_e", use_container_width=True, disabled=True)
 
     with c2:
         with st.container(border=True):
@@ -1244,9 +1247,12 @@ with t3:
             conn=sqlite3.connect(DB); dfh=pd.read_sql("SELECT name as Hotels FROM hotels ORDER BY name", conn); conn.close()
             st.dataframe(dfh, use_container_width=True, height=250, hide_index=True)
             if not dfh.empty:
-                dh=st.selectbox("", dfh['Hotels'].tolist(), key="del_h_4col", label_visibility="collapsed", placeholder="Select...")
-                if st.button("🗑️ Delete", key="delb_h_4col", use_container_width=True):
+                dh=st.selectbox("", dfh['Hotels'].tolist(), key="del_h_4col", label_visibility="collapsed")
+                if st.button("Delete", key="delb_h_4col", use_container_width=True):
                     conn=sqlite3.connect(DB); conn.execute("DELETE FROM hotels WHERE name=?", (dh,)); conn.commit(); conn.close(); st.rerun()
+            else:
+                st.selectbox("", ["empty"], key="del_h_4col_e", label_visibility="collapsed", disabled=True)
+                st.button("Delete", key="delb_h_4col_e", use_container_width=True, disabled=True)
 
     with c3:
         with st.container(border=True):
@@ -1260,9 +1266,12 @@ with t3:
             conn=sqlite3.connect(DB); dfal=pd.read_sql("SELECT name as Airlines FROM airlines ORDER BY name", conn); conn.close()
             st.dataframe(dfal, use_container_width=True, height=250, hide_index=True)
             if not dfal.empty:
-                dal=st.selectbox("", dfal['Airlines'].tolist(), key="del_al_4col", label_visibility="collapsed", placeholder="Select...")
-                if st.button("🗑️ Delete", key="delb_al_4col", use_container_width=True):
+                dal=st.selectbox("", dfal['Airlines'].tolist(), key="del_al_4col", label_visibility="collapsed")
+                if st.button("Delete", key="delb_al_4col", use_container_width=True):
                     conn=sqlite3.connect(DB); conn.execute("DELETE FROM airlines WHERE name=?", (dal,)); conn.commit(); conn.close(); st.rerun()
+            else:
+                st.selectbox("", ["empty"], key="del_al_4col_e", label_visibility="collapsed", disabled=True)
+                st.button("Delete", key="delb_al_4col_e", use_container_width=True, disabled=True)
 
     with c4:
         with st.container(border=True):
@@ -1276,6 +1285,9 @@ with t3:
             conn=sqlite3.connect(DB); dft=pd.read_sql("SELECT name as Transport FROM transport_companies ORDER BY name", conn); conn.close()
             st.dataframe(dft, use_container_width=True, height=250, hide_index=True)
             if not dft.empty:
-                dt=st.selectbox("", dft['Transport'].tolist(), key="del_t_4col", label_visibility="collapsed", placeholder="Select...")
-                if st.button("🗑️ Delete", key="delb_t_4col", use_container_width=True):
+                dt=st.selectbox("", dft['Transport'].tolist(), key="del_t_4col", label_visibility="collapsed")
+                if st.button("Delete", key="delb_t_4col", use_container_width=True):
                     conn=sqlite3.connect(DB); conn.execute("DELETE FROM transport_companies WHERE name=?", (dt,)); conn.commit(); conn.close(); st.rerun()
+            else:
+                st.selectbox("", ["empty"], key="del_t_4col_e", label_visibility="collapsed", disabled=True)
+                st.button("Delete", key="delb_t_4col_e", use_container_width=True, disabled=True)
