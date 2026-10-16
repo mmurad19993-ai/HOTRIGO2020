@@ -1021,40 +1021,45 @@ with r:
             else:
                 conn=sqlite3.connect(DB); row=conn.execute("SELECT * FROM bookings WHERE id=?", (int(ids[0]),)).fetchone(); conn.close()
                 if row: voucher_dialog(row)
-    if statement_btn:
-        ag = get_selected_agent()
-        if not ag: st.error("حدد سطر واحد للوكيل")
-        else: agent_statement_dialog(ag)
-    if view_btn:
-        ids=get_selected_ids()
-        if len(ids)!=1: st.error("حدد حجز واحد من الجدول أولاً")
-        else:
-            conn=sqlite3.connect(DB)
-            conn.row_factory=sqlite3.Row
-            row=conn.execute("SELECT * FROM bookings WHERE id=?", (int(ids[0]),)).fetchone()
-            conn.close()
-            if row:
-                @st.dialog("عرض الحجز", width="large")
-                def view_dialog():
-                    d=dict(row)
-                    st.markdown(f"<h1 style='text-align:center; font-weight:900; font-size:32px;'>{d.get('company','')}</h1>", unsafe_allow_html=True)
+if statement_btn:
+    ag = get_selected_agent()
+    if not ag:
+        st.error("حدد سطر واحد للوكيل")
+    else:
+        agent_statement_dialog(ag)
+
+if view_btn:
+    ids = get_selected_ids()
+    if len(ids)!= 1:
+        st.error("حدد حجز واحد من الجدول أولاً")
+    else:
+        conn = sqlite3.connect(DB)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT * FROM bookings WHERE id=?", (int(ids[0]),)).fetchone()
+        conn.close()
+        if row:
+            @st.dialog("عرض الحجز", width="large")
+            def view_dialog():
+                d = dict(row)
+                st.markdown(f"<h1 style='text-align:center; font-weight:900; font-size:32px;'>{d.get('company','')}</h1>", unsafe_allow_html=True)
+                st.divider()
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.markdown("**👥 المسافرين:**")
+                    st.info(d.get('passengers',''))
+                    st.markdown(f"**🏨 الفندق:** {d.get('hotel','')}")
+                    st.markdown(f"**📝 الملاحظة:** {d.get('notes','')}")
+                with c2:
+                    st.markdown(f"**📅 الدخول:** {d.get('entry_date','')}")
+                    st.markdown(f"**📅 الخروج:** {d.get('exit_date','')}")
                     st.divider()
-                    c1,c2=st.columns(2)
-                    with c1:
-                        st.markdown("**👥 المسافرين:**")
-                        st.info(d.get('passengers',''))
-                        st.markdown(f"**🏨 الفندق:** {d.get('hotel','')}")
-                        st.markdown(f"**📝 الملاحظة:** {d.get('notes','')}")
-                    with c2:
-                        st.markdown(f"**📅 الدخول:** {d.get('entry_date','')}")
-                        st.markdown(f"**📅 الخروج:** {d.get('exit_date','')}")
-                        st.divider()
-                        st.markdown(f"**✈️ ذهاب:** {d.get('flight_dep_time','')} مطار {d.get('dep_airport','')}")
-                        st.markdown(f"**✈️ عودة:** {d.get('flight_ret_time','')} مطار {d.get('ret_airport','')}")
-                        st.markdown(f"**شركة طيران:** {d.get('airline','')}")
-                view_dialog()
-    with t2:
-        st.markdown("## 💰 كشف حساب الوكلاء")
+                    st.markdown(f"**✈️ ذهاب:** {d.get('flight_dep_time','')} مطار {d.get('dep_airport','')}")
+                    st.markdown(f"**✈️ عودة:** {d.get('flight_ret_time','')} مطار {d.get('ret_airport','')}")
+                    st.markdown(f"**شركة طيران:** {d.get('airline','')}")
+            view_dialog()
+
+with t2:
+    st.markdown("## 💰 كشف حساب الوكلاء")
     col_pay1, col_pay2 = st.columns([1,2])
     with col_pay1:
         st.markdown("#### اضافة دفعة جديدة")
