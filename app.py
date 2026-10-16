@@ -25,7 +25,7 @@ except:
 BASE_DIR = os.path.dirname(__file__)
 DRIVE_FOLDER = "Hotrigo Backup"
 SHEET_NAME = "HOTRIGO_DATABASE"
-SHEET_HEADER = ["ID","Agent","Passengers","Passengers Count","Hotel","Rooms","Room Type","Price Night","Hotel Total","Check-in","Check-out","Nights","Flight $","Transport $","Sell Price","Cost","Profit","Sale Date","Voucher No","Notes","Airline","Employee","Dep Time","Ret Time","Flight No Dep","Flight No Ret","Transport Co"]
+SHEET_HEADER = ["ID","Agent","Passengers","Passengers Count","Hotel","Rooms","Room Type","Price Night","Hotel Total","Check-in","Nights","Check-out","Flight $","Transport $","Sell Price","Cost","Profit","Sale Date","Voucher No","Notes","Airline","Employee","Dep Time","Ret Time","Flight No Dep","Flight No Ret","Transport Co"]
 
 def get_drive_service():
     try:
@@ -145,6 +145,8 @@ def get_gspread_sheet():
     except Exception as e:
         print(f"Sheet open failed: {e}")
         return None
+SHEET_HEADER = ["ID","Agent","Passengers","Passengers Count","Hotel","Rooms","Room Type","Price Night","Hotel Total","Check-in","Nights","Check-out","Flight $","Transport $","Sell Price","Cost","Profit","Sale Date","Voucher No","Notes","Airline","Employee","Dep Time","Ret Time","Flight No Dep","Flight No Ret","Transport Co"]
+
 def booking_to_sheet_row(b):
     try:
         import sqlite3
@@ -198,15 +200,15 @@ def booking_to_sheet_row(b):
             room_count,
             gv("room_type"),
             pn, # Price Night
-            hotel_total, # Hotel Total = Price Night * Rooms * Nights
+            hotel_total, # Hotel Total
             gv("entry_date"), # Check-in
+            nights, # Nights
             gv("exit_date"), # Check-out
-            nights,
-            fl,
-            tr,
-            sell,
-            cost,
-            profit,
+            fl, # Flight $
+            tr, # Transport $
+            sell, # Sell Price
+            cost, # Cost
+            profit, # Profit
             gv("sale_date"),
             gv("voucher_no"),
             gv("notes"),
@@ -222,11 +224,13 @@ def booking_to_sheet_row(b):
     except Exception as e:
         print(f"booking_to_sheet_row error {e} for {b}")
         return None
+
 def sync_booking_to_sheet(booking_id):
     try:
         sheet = get_gspread_sheet()
         if not sheet: return False
         conn=sqlite3.connect(DB)
+        conn.row_factory = sqlite3.Row
         b=conn.execute("SELECT * FROM bookings WHERE id=?", (int(booking_id),)).fetchone()
         conn.close()
         if not b: return False
@@ -234,7 +238,7 @@ def sync_booking_to_sheet(booking_id):
         if not row: return False
         try:
             cell = sheet.find(str(booking_id))
-            sheet.update(f"A{cell.row}:Z{cell.row}", [row])
+            sheet.update(f"A{cell.row}:AA{cell.row}", [row])
             print(f"✅ Updated ID {booking_id}")
         except:
             sheet.append_row(row, value_input_option='USER_ENTERED')
@@ -243,7 +247,6 @@ def sync_booking_to_sheet(booking_id):
     except Exception as e:
         print(f"Sync failed {booking_id}: {e}")
         return False
-
 def sync_all_to_sheet():
     try:
         sheet = get_gspread_sheet()
