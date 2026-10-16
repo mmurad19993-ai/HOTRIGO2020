@@ -730,17 +730,15 @@ with t1:
         except: nights_val=0
         xd=ed+timedelta(days=nights_val)
         st.caption(f"Check-out: {xd}")
-        pn_s=st.text_input("Price per Night $", key="pn")
-        fl_s=st.text_input("Flight $", key="fl")
-        tr_s=st.text_input("Transport $", key="tr")
-        sell_s=st.text_input("Selling Price $ *", key="sell")
-        pn=to_f(pn_s); fl=to_f(fl_s); tr=to_f(tr_s); sell=to_f(sell_s)
-        try: pax_count_val=int(pax_count)
-        except: pax_count_val=1
-        try: room_count_val=int(room_count) if room_count.strip()!="" else 0
-        except: room_count_val=0
-        rc_for_calc = room_count_val if room_count_val > 0 else 1
-        cost_total = (pn * nights_val * rc_for_calc) + fl + tr
+    pn_s=st.text_input("Price per Night $", key="pn")
+    fl_s=st.text_input("Flight $", key="fl")
+    tr_s=st.text_input("Transport $", key="tr")
+    sell_s=st.text_input("Selling Price $ *", key="sell")
+    pn=to_f(pn_s); fl=to_f(fl_s); tr=to_f(tr_s); sell=to_f(sell_s)
+    try: pax_count_val=int(pax_count)
+    except: pax_count_val=1
+    try: room_count_val=int(room_count) if room_count.strip()!="" else 0
+    except: room_count_val=0
     rc_for_calc = room_count_val if room_count_val > 0 else 1
     cost_total = (pn * nights_val * rc_for_calc) + fl + tr
     if cost_total > 0:
