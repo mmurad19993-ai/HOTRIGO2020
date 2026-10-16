@@ -25,7 +25,7 @@ except:
 BASE_DIR = os.path.dirname(__file__)
 DRIVE_FOLDER = "Hotrigo Backup"
 SHEET_NAME = "HOTRIGO_DATABASE"
-SHEET_HEADER = ["ID","Sale Date","Agent","Passengers","Room Type","Rooms","Hotel","Check-in","Check-out","Nights","Sell Price","Cost","Profit","Voucher No","Notes","Airline","Employee","Dep Time","Ret Time","Flight No Dep","Flight No Ret","Transport Co","Price Night","Hotel Total","Flight $","Transport $"]
+SHEET_HEADER = ["ID","Agent","Passengers","Passengers Count","Hotel","Rooms","Room Type","Flight $","Transport $","Sell Price","Cost","Profit","Sale Date","Check-in","Check-out","Nights","Voucher No","Notes","Airline","Employee","Dep Time","Ret Time","Flight No Dep","Flight No Ret","Transport Co","Price Night","Hotel Total"]
 
 def get_drive_service():
     try:
