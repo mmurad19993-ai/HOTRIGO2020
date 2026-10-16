@@ -695,66 +695,76 @@ def edit_dialog(row):
 
     e_trans_co = st.text_input("Transport Company (empty=no transfer)", value=gv("transport_company"), key="dlg_transco")
 
-    # ===== FIX : ترتيب صحيح بدون نط غلط =====
+    # ===== نظام تنقل شبكي 2D - يمين / يسار / فوق / تحت =====
     components.html("""
     <script>
     const doc = window.parent.document;
-    function getOrderedFields(){
+    function getMap(){
         const dlg = doc.querySelector('div[data-testid="stDialog"]');
         if(!dlg) return [];
-        const list = [];
-        // نمر على كل بلوك بالترتيب المرئي وناخد حقل واحد فقط منه
+        const arr = [];
         dlg.querySelectorAll('[data-testid="stTextInput"], [data-testid="stTextArea"], [data-testid="stSelectbox"]').forEach(w=>{
-            let el = null;
-            if(w.dataset.testid === 'stSelectbox'){
-                el = w.querySelector('div[role="combobox"]');
-            } else {
-                el = w.querySelector('input, textarea');
-            }
-            if(el && el.offsetParent !== null) list.push(el);
+            let el = w.dataset.testid === 'stSelectbox' ? w.querySelector('div[role="combobox"]') : w.querySelector('input, textarea');
+            if(!el || el.offsetParent===null) return;
+            const r = w.getBoundingClientRect();
+            arr.push({w, el, x:r.left, y:r.top, cx:(r.left+r.right)/2, cy:(r.top+r.bottom)/2});
         });
-        return list;
+        return arr;
     }
-    function focusNext(fields, curr, dir){
-        let idx = fields.indexOf(curr);
-        if(idx===-1){
-            // اذا الـ active هو input جوا الـ wrapper
-            const wrapper = curr.closest ? curr.closest('[data-testid="stTextInput"], [data-testid="stTextArea"], [data-testid="stSelectbox"]') : null;
-            if(wrapper){
-                const inner = wrapper.querySelector('div[role="combobox"]') || wrapper.querySelector('input, textarea');
-                idx = fields.indexOf(inner);
-            }
-        }
-        if(idx===-1) return;
-        let n = idx + dir;
-        if(n < 0) n = 0;
-        if(n >= fields.length){
-            const btn = doc.querySelector('div[data-testid="stDialog"] button[kind="primary"]');
-            if(btn) btn.click();
-            return;
-        }
-        fields[n].focus();
-        try{ if(fields[n].tagName==='INPUT') fields[n].select(); }catch(e){}
+    function findCur(map){
+        const a = doc.activeElement;
+        for(let m of map){ if(m.el===a || m.w.contains(a)) return m; }
+        return null;
     }
+    function focusM(m){ if(m){ m.el.focus(); try{ m.el.select(); }catch(e){} } }
+
     doc.addEventListener('keydown', function(e){
+        if(!['ArrowRight','ArrowLeft','ArrowDown','ArrowUp','Enter'].includes(e.key)) return;
         const dlg = doc.querySelector('div[data-testid="stDialog"]');
         if(!dlg || !dlg.contains(doc.activeElement)) return;
-        const fields = getOrderedFields();
-        const curr = doc.activeElement;
-        const isArea = curr.tagName === 'TEXTAREA';
+        const map = getMap();
+        const cur = findCur(map);
+        if(!cur) return;
+        const isArea = doc.activeElement.tagName==='TEXTAREA';
+        if(e.key==='Enter' && isArea && !e.ctrlKey) return;
 
-        if(e.key === 'Enter' && !isArea){
-            e.preventDefault(); focusNext(fields, curr, 1);
-        } else if(e.key === 'ArrowDown'){
-            if(isArea && !e.ctrlKey) return;
-            e.preventDefault(); focusNext(fields, curr, 1);
-        } else if(e.key === 'ArrowUp'){
-            if(isArea && !e.ctrlKey) return;
-            e.preventDefault(); focusNext(fields, curr, -1);
-        } else if(e.key === 'ArrowRight' && curr.selectionStart === curr.value.length){
-            e.preventDefault(); focusNext(fields, curr, 1);
-        } else if(e.key === 'ArrowLeft' && curr.selectionStart === 0){
-            e.preventDefault(); focusNext(fields, curr, -1);
+        let target=null;
+        const ROW_TOL=30;
+
+        if(e.key==='ArrowRight'){
+            let cands = map.filter(m=> m!==cur && Math.abs(m.y-cur.y)<ROW_TOL && m.x>cur.x-5);
+            cands.sort((a,b)=>a.x-b.x);
+            target=cands[0];
+        } else if(e.key==='ArrowLeft'){
+            let cands = map.filter(m=> m!==cur && Math.abs(m.y-cur.y)<ROW_TOL && m.x<cur.x+5);
+            cands.sort((a,b)=>b.x-a.x);
+            target=cands[0];
+        } else if(e.key==='ArrowDown' || e.key==='Enter'){
+            let cands = map.filter(m=> m!==cur && m.y>cur.y+5 && Math.abs(m.x-cur.x)<160);
+            if(!cands.length) cands = map.filter(m=> m.y>cur.y+5);
+            cands.sort((a,b)=>{
+                const ax=Math.abs(a.x-cur.x), bx=Math.abs(b.x-cur.x);
+                if(Math.abs(ax-bx)>25) return ax-bx;
+                return a.y-b.y;
+            });
+            target=cands[0];
+        } else if(e.key==='ArrowUp'){
+            let cands = map.filter(m=> m!==cur && m.y<cur.y-5 && Math.abs(m.x-cur.x)<160);
+            if(!cands.length) cands = map.filter(m=> m.y<cur.y-5);
+            cands.sort((a,b)=>{
+                const ax=Math.abs(a.x-cur.x), bx=Math.abs(b.x-cur.x);
+                if(Math.abs(ax-bx)>25) return ax-bx;
+                return b.y-a.y;
+            });
+            target=cands[0];
+        }
+
+        if(target){
+            e.preventDefault();
+            focusM(target);
+        } else if(e.key==='Enter' && !isArea){
+            const btn = doc.querySelector('div[data-testid="stDialog"] button[kind="primary"]');
+            if(btn){ e.preventDefault(); btn.click(); }
         }
     }, true);
     </script>
