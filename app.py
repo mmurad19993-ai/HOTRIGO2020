@@ -1144,19 +1144,15 @@ with t2:
         out["Note"] = df[note_col] if note_col in df.columns else ""
         return out
 
-        df_display = build_statement(df_raw.copy())
+        df_display = build_statement(df_raw.copy()) if 'df_raw' in locals() and not df_raw.empty else pd.DataFrame()
 st.divider()
 
 st.markdown("""
 <style>
-/* أطول متل تقرير الوكلاء */
 div[data-testid="stSelectbox"] div[data-baseweb="select"]{min-height:42px !important; height:42px !important;}
 div[data-testid="stDateInput"] input, div[data-testid="stTextInput"] input{height:42px !important; min-height:42px !important; font-size:14px !important;}
 div[data-testid="stSelectbox"] label, div[data-testid="stDateInput"] label, div[data-testid="stTextInput"] label{font-size:13px !important; margin-bottom:4px !important;}
-/* الزرين قد بعض تماما */
-div[data-testid="stButton"] button, div[data-testid="stDownloadButton"] button{
-    height:38px !important; min-height:38px !important; font-size:13px !important;
-}
+div[data-testid="stButton"] button, div[data-testid="stDownloadButton"] button{height:38px !important; min-height:38px !important; font-size:13px !important;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1174,10 +1170,10 @@ with left_side:
         # زرين قد بعض 1:1 بنفس السطر
         top_b1, top_b2 = st.columns([1, 1], gap="small")
         
-        pay_agent=st.selectbox("Select Agent",agents_list,key=f"pay_agent_{view_agent}",index=agents_list.index(view_agent) if view_agent in agents_list else 0)
-        pay_date=st.date_input("Payment Date",datetime.now(),key=f"pay_date_{view_agent}")
-        pay_amount=st.text_input("Amount $",key=f"pay_amount_{view_agent}", placeholder="$ Amount")
-        pay_note=st.text_input("Note",key=f"pay_note_{view_agent}", placeholder="Bank transfer - Cash...")
+        pay_agent=st.selectbox("Select Agent",agents_list,key=f"pay_agent_{view_agent}" if 'view_agent' in locals() else "pay_agent_main",index=agents_list.index(view_agent) if 'view_agent' in locals() and view_agent in agents_list else 0)
+        pay_date=st.date_input("Payment Date",datetime.now(),key=f"pay_date_{view_agent}" if 'view_agent' in locals() else "pay_date_main")
+        pay_amount=st.text_input("Amount $",key=f"pay_amount_{view_agent}" if 'view_agent' in locals() else "pay_amount_main", placeholder="$ Amount")
+        pay_note=st.text_input("Note",key=f"pay_note_{view_agent}" if 'view_agent' in locals() else "pay_note_main", placeholder="Bank transfer - Cash...")
 
         with top_b1:
             if st.button("🖨️ Print PDF",use_container_width=True,key=f"btn_pdf_add_{pay_agent}"):
@@ -1188,7 +1184,14 @@ with left_side:
                     conn=sqlite3.connect(DB)
                     df_pays_pdf=pd.read_sql("SELECT pay_date,amount,note FROM agent_payments WHERE agent=? ORDER BY pay_date",conn,params=(pay_agent,))
                     total_paid_pdf=df_pays_pdf['amount'].sum() if not df_pays_pdf.empty else 0
+                    # ✅ تصليح الخطأ هون - لا نستخدم df_display
+                    df_raw_for_pdf = pd.read_sql("SELECT * FROM bookings WHERE company=?", conn, params=(pay_agent,))
                     conn.close()
+                    df_pdf_source = build_statement(df_raw_for_pdf.copy()) if not df_raw_for_pdf.empty else pd.DataFrame()
+                    if df_pdf_source.empty:
+                        st.error(f"No bookings for {pay_agent}")
+                        st.stop()
+
                     class PDF(FPDF):
                         def header(self):
                             self.set_font("Arial","B",26);self.set_text_color(13,71,161);self.cell(0,14,"HOTRIGO",ln=True,align='C')
@@ -1198,7 +1201,6 @@ with left_side:
                             self.set_y(-15);self.set_font("Arial","I",7);self.set_text_color(150,150,150);self.cell(0,10,f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')} | HOTRIGO - {pay_agent}",align='C')
                     pdf=PDF(orientation='L',unit='mm',format='A4');pdf.set_auto_page_break(auto=True,margin=20);pdf.add_page()
                     pdf.set_font("Arial","B",14);pdf.cell(0,10,f"Agent Statement - {pay_agent}",ln=True,align='C');pdf.ln(4)
-                    df_pdf_source=df_display if pay_agent==view_agent else build_statement(pd.read_sql("SELECT * FROM bookings WHERE company=?",sqlite3.connect(DB),params=(pay_agent,)).copy()) if not pd.read_sql("SELECT * FROM bookings WHERE company=?",sqlite3.connect(DB),params=(pay_agent,)).empty else df_display
                     df_pdf=df_pdf_source[["Booking ID","Passenger Names","Pax Count","Hotel","Rooms","Check-in","Check-out","Nights","Sell Price","Note"]].copy()
                     cols=["Booking ID","Passenger Names","Pax","Hotel","Rooms","Check-in","Check-out","Nights","Sell Price","Note"];col_widths=[22,55,10,40,12,22,22,12,22,35]
                     pdf.set_font("Arial","B",8);pdf.set_fill_color(13,71,161);pdf.set_text_color(255,255,255)
