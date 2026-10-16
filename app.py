@@ -549,7 +549,33 @@ components.html(js_code, height=0)
 
 @st.dialog("Edit Booking")
 def edit_dialog(row):
-    rc_val = row[25] if len(row)>25 and row[25] else 1
+    def safe_int(v, default=1):
+        try:
+            s = str(v).strip().split()[0].split(" ")[0].split(".")[0]
+            if not s or not s.lstrip("-").isdigit():
+                return default
+            return int(s)
+        except:
+            return default
+
+    # row[25] عندك فيه تاريخ - عم ندور على عدد الغرف بالعمود الصح
+    raw_rc = 1
+    # جرب 25 أول شي، اذا طلع تاريخ جرب الأعمدة التانية
+    for idx in [25, 7, 8, 9, 10, 11]:
+        if len(row) > idx and row[idx] not in (None, "", "0"):
+            val = str(row[idx])
+            # اذا تاريخ تجاهلو
+            if "-" in val and "2026" in val:
+                continue
+            if "20" in val and ":" in val: # وقت
+                continue
+            raw_rc = val
+            break
+
+    rc_val = safe_int(raw_rc, 1)
+    if rc_val < 1: rc_val = 1
+    if rc_val > 20: rc_val = 20
+
     st.info(f"Editing booking #{row[0]} - {row[4]}")
     col_left, col_right = st.columns(2)
     with col_left:
@@ -557,7 +583,7 @@ def edit_dialog(row):
         e_comp = st.text_input("Agent *", value=row[4], key="dlg_comp")
         e_pas = st.text_area("Passengers", value=row[5], height=130, key="dlg_pas")
         e_room = st.text_input("Room Type", value=row[21] if len(row)>21 and row[21] else "", key="dlg_room")
-        e_rc = st.number_input("Number of Rooms", 1, 20, int(rc_val), key="dlg_rc")
+        e_rc = st.number_input("Number of Rooms", 1, 20, rc_val, key="dlg_rc")
         e_hotel = st.text_input("Hotel *", value=row[6], key="dlg_hotel")
         e_fno_dep = st.text_input("Flight No Dep", value=row[23] if len(row)>23 and row[23] else "", key="dlg_fno_dep")
         e_air = st.text_input("Airline", value=row[17] or "", key="dlg_air")
