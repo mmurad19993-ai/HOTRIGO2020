@@ -1091,6 +1091,59 @@ if view_btn:
             view_dialog()
 with t2:
     st.markdown("## 💰 كشف حساب الوكلاء")
+
+    # --- سطر جديد: اختيار الوكيل + طباعة PDF + تصدير Excel ---
+    st.markdown("#### 🔍 عرض كشف وكيل")
+    c1, c2, c3 = st.columns([3, 1, 1])
+
+    conn=sqlite3.connect(DB)
+    all_companies=[x[0] for x in conn.execute("SELECT DISTINCT company FROM bookings WHERE company IS NOT NULL AND company!='' ORDER BY company").fetchall()]
+    conn.close()
+
+    with c1:
+        view_agent = st.selectbox("اختر الوكيل لعرض كشفو", all_companies, key="view_agent", label_visibility="collapsed", placeholder="اختر الوكيل...")
+
+    # جيب حجوزات هالوكيل
+    conn=sqlite3.connect(DB)
+    df_agent = pd.read_sql("SELECT * FROM bookings WHERE company=? ORDER BY entry_date DESC", conn, params=(view_agent,))
+    conn.close()
+
+    with c2:
+        # PDF
+        if st.button("🖨️ طباعة PDF", use_container_width=True, key="btn_pdf"):
+            from fpdf import FPDF
+            pdf = FPDF(orientation='L')
+            pdf.add_page()
+            pdf.set_font("Arial", "B", 14)
+            pdf.cell(0, 10, f"Agent Statement - {view_agent}", ln=True, align='C')
+            pdf.ln(5)
+            pdf.set_font("Arial", "", 8)
+            # هيدر
+            cols = ["Date", "Hotel", "Pax", "Sell", "Note"]
+            for col in cols:
+                pdf.cell(55, 8, col, border=1)
+            pdf.ln()
+            for _, r in df_agent.iterrows():
+                pdf.cell(55, 6, str(r.get('entry_date','')), border=1)
+                pdf.cell(55, 6, str(r.get('hotel',''))[:30], border=1)
+                pdf.cell(55, 6, str(r.get('passengers',''))[:30], border=1)
+                pdf.cell(55, 6, str(r.get('sell','')), border=1)
+                pdf.cell(55, 6, str(r.get('notes','') or r.get('note',''))[:30], border=1)
+                pdf.ln()
+            pdf_bytes = pdf.output(dest='S').encode('latin-1')
+            st.download_button("📥 تحميل PDF", pdf_bytes, file_name=f"{view_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key="dl_pdf")
+
+    with c3:
+        from io import BytesIO
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_agent.to_excel(writer, index=False, sheet_name="Statement")
+        st.download_button("📊 تصدير Excel", output.getvalue(), file_name=f"{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="dl_excel")
+
+    st.dataframe(df_agent, use_container_width=True, hide_index=True)
+    st.divider()
+
+    # --- كودك القديم يبلش من هون ---
     col_pay1, col_pay2 = st.columns([1,2])
     with col_pay1:
         st.markdown("#### اضافة دفعة جديدة")
