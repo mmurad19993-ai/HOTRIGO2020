@@ -695,10 +695,13 @@ def edit_dialog(row):
 
     e_trans_co = st.text_input("Transport Company (empty=no transfer)", value=gv("transport_company"), key="dlg_transco")
 
-    # ===== نظام تنقل شبكي ثابت - إكسل مثل =====
+    # ===== شبكة ثابتة + تنظيف الـ listeners القديمة =====
     components.html("""
     <script>
     const doc = window.parent.document;
+    if(doc._editBookingNavHandler){
+        doc.removeEventListener('keydown', doc._editBookingNavHandler, true);
+    }
     function getFields(){
         const dlg = doc.querySelector('div[data-testid="stDialog"]');
         if(!dlg) return [];
@@ -709,21 +712,8 @@ def edit_dialog(row):
         });
         return list;
     }
-    // 13 صف - كل صف فيه عمودين او عمود واحد
     const GRID = [
-        [0,1],   // 0:Sale | 1:Entry
-        [2,3],   // 2:Exit | 3:Agent
-        [4],     // 4:Passengers
-        [5,6],   // 5:Room Type | 6:Number of Rooms
-        [7,8],   // 7:Hotel | 8:Employee
-        [9,10],  // 9:Price | 10:Flight
-        [11,12], // 11:Transport | 12:Selling
-        [13],    // 13:Note
-        [14,15], // 14:Airline | 15:Voucher
-        [16,17], // 16:Dep Time | 17:Ret Time
-        [18,19], // 18:Flight No Dep | 19:Ret
-        [20,21], // 20:Dep Airport | 21:Ret Airport
-        [22]     // 22:Transport Company
+        [0,1], [2,3], [4], [5,6], [7,8], [9,10], [11,12], [13], [14,15], [16,17], [18,19], [20,21], [22]
     ];
     function findPos(idx){
         for(let r=0;r<GRID.length;r++){
@@ -732,7 +722,7 @@ def edit_dialog(row):
         }
         return null;
     }
-    doc.addEventListener('keydown', function(e){
+    const handler = function(e){
         if(!['ArrowRight','ArrowLeft','ArrowDown','ArrowUp','Enter'].includes(e.key)) return;
         const dlg = doc.querySelector('div[data-testid="stDialog"]');
         if(!dlg || !dlg.contains(doc.activeElement)) return;
@@ -743,8 +733,21 @@ def edit_dialog(row):
             if(fields[i]===doc.activeElement || fields[i].contains(doc.activeElement) || doc.activeElement.contains(fields[i])){curIdx=i; break;}
         }
         if(curIdx===-1) return;
-        const isArea=doc.activeElement.tagName==='TEXTAREA';
-        if(e.key==='Enter' && isArea && !e.ctrlKey) return;
+        const active = doc.activeElement;
+        const isArea = active.tagName==='TEXTAREA';
+        
+        // للـ textarea خلي السهم يتحرك جوا النص الا اذا Ctrl مضغوط
+        if(isArea){
+            if(e.key==='ArrowDown' && !e.ctrlKey) return;
+            if(e.key==='ArrowUp' && !e.ctrlKey) return;
+            if(e.key==='ArrowRight' && active.selectionStart < active.value.length && !e.ctrlKey) return;
+            if(e.key==='ArrowLeft' && active.selectionStart > 0 && !e.ctrlKey) return;
+            if(e.key==='Enter' && !e.ctrlKey) return;
+        } else {
+            if(e.key==='ArrowRight' && active.selectionStart < active.value.length) return;
+            if(e.key==='ArrowLeft' && active.selectionStart > 0) return;
+        }
+        
         const pos=findPos(curIdx);
         if(!pos) return;
         let target=null;
@@ -774,11 +777,13 @@ def edit_dialog(row):
             }
         }
         if(target!==null){
-            e.preventDefault();
+            e.preventDefault(); e.stopImmediatePropagation();
             const el=fields[target];
             if(el){ el.focus(); try{ el.select(); }catch(_){} }
         }
-    }, true);
+    };
+    doc._editBookingNavHandler = handler;
+    doc.addEventListener('keydown', handler, true);
     </script>
     """, height=0)
 
