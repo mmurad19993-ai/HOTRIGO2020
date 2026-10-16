@@ -1251,7 +1251,7 @@ with t2:
                 if k.lower() in c.lower(): return c
         return None
 
-    def generate_pdf_bytes(pay_agent):
+def generate_pdf_bytes(pay_agent):
     from fpdf import FPDF
     from io import BytesIO
     from datetime import datetime
