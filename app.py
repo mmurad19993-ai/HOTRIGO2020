@@ -1041,22 +1041,27 @@ if view_btn:
             @st.dialog("Booking Details", width="small")
             def view_dialog():
                 d = dict(row)
-                st.markdown(f"<h3 style='text-align:center; font-weight:900; margin-bottom:0;'>{d.get('company','')}</h3>", unsafe_allow_html=True)
+                st.markdown(f"<h3 style='text-align:center; font-weight:900; margin:0;'>{d.get('company','')}</h3>", unsafe_allow_html=True)
                 st.divider()
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.markdown("**Passengers:**")
-                    st.info(d.get('passengers',''))
-                    st.markdown(f"**Hotel:** {d.get('hotel','')}")
-                    st.markdown(f"**Note:** {d.get('notes','')}")
-                with c2:
-                    st.markdown(f"**Check-in:** {d.get('entry_date','')}")
-                    st.markdown(f"**Departure:** {d.get('flight_dep_time','')} {d.get('dep_airport','')}")
-                    st.markdown(f"Flight No: **{d.get('flight_no_dep','')}**")
-                    st.markdown("---")
-                    st.markdown(f"**Check-out:** {d.get('exit_date','')}")
-                    st.markdown(f"**Return:** {d.get('flight_ret_time','')} {d.get('ret_airport','')}")
-                    st.markdown(f"Flight No: **{d.get('flight_no_ret','')}**")
+                
+                # --- القسم الاول - فوق ---
+                st.markdown(f"**Passengers:** {d.get('passengers','')}")
+                st.markdown(f"**Hotel:** {d.get('hotel','')}")
+                st.markdown(f"**Check-in:** {d.get('entry_date','')}")
+                st.markdown(f"**Departure:** {d.get('flight_dep_time','')} {d.get('dep_airport','')}")
+                st.markdown(f"Flight No: **{d.get('flight_no_dep','')}**")
+                
+                # --- فراغ كبير للسكرول ---
+                st.markdown("<div style='height:350px;'></div>", unsafe_allow_html=True)
+                st.divider()
+                
+                # --- القسم الثاني - تحت بعد السكرول ---
+                st.markdown(f"**Hotel:** {d.get('hotel','')}")
+                st.markdown(f"**Passengers:** {d.get('passengers','')}")
+                st.markdown(f"**Check-out:** {d.get('exit_date','')}")
+                st.markdown(f"**Return:** {d.get('flight_ret_time','')} {d.get('ret_airport','')}")
+                st.markdown(f"Flight No: **{d.get('flight_no_ret','')}**")
+
             view_dialog()
 with t2:
     st.markdown("## 💰 كشف حساب الوكلاء")
