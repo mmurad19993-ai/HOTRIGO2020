@@ -1309,8 +1309,8 @@ def generate_pdf_bytes(pay_agent):
     pdf.set_text_color(13, 71, 161)
     pdf.cell(0, 8, f"Bookings - {pay_agent}", ln=True)
     pdf.ln(2)
-    headers = ["Agent", "Traveler", "Pax", "Hotel", "Room Type", "Rooms", "Check-in", "Nights", "Check-out", "Sale Price", "Note"]
-    widths = [22, 28, 10, 32, 22, 12, 20, 12, 20, 20, 79]
+    headers = ["ID", "Agent", "Traveler", "Pax", "Hotel", "Room Type", "Rooms", "Check-in", "Nights", "Check-out", "Sale Price", "Note"]
+    widths = [12, 18, 24, 9, 28, 20, 10, 18, 10, 18, 18, 92]
     pdf.set_font("Arial", "B", 7)
     pdf.set_fill_color(13, 71, 161)
     pdf.set_text_color(255, 255, 255)
@@ -1322,8 +1322,7 @@ def generate_pdf_bytes(pay_agent):
     for _, row in df_raw_for_pdf.iterrows():
         if pdf.get_y() > 175:
             pdf.add_page()
-        vals = [str(pay_agent)[:12], first_traveler_only(row.get(col_traveler, "") if col_traveler else ""), str(row.get(col_pax, "") if col_pax else ""), str(row.get(col_hotel, "") if col_hotel else "")[:18], str(row.get(col_room_type, "") if col_room_type else "")[:12], str(row.get(col_room_count, "") if col_room_count else ""), str(row.get(col_checkin, "") if col_checkin else "")[:10], str(row.get(col_nights, "") if col_nights else ""), str(row.get(col_checkout, "") if col_checkout else "")[:10], f"${to_f_local(row.get(sell_c,0)):.0f}" if sell_c else "", str(row.get(col_note, "") if col_note else "")[:50]]
-        for v, w in zip(vals, widths):
+        vals = [str(row.get('id',"")), str(pay_agent)[:12], first_traveler_only(row.get(col_traveler,"") if col_traveler else ""), str(row.get(col_pax,"") if col_pax else ""), str(row.get(col_hotel,"") if col_hotel else "")[:18], str(row.get(col_room_type,"") if col_room_type else "")[:12], str(row.get(col_room_count,"") if col_room_count else ""), str(row.get(col_checkin,"") if col_checkin else "")[:10], str(row.get(col_nights,"") if col_nights else ""), str(row.get(col_checkout,"") if col_checkout else "")[:10], f"${to_f_local(row.get(sell_c,0)):.0f}" if sell_c else "", str(row.get(col_note,"") if col_note else "")[:50]]
             pdf.cell(w, 7, v, border=1, align='C')
         pdf.ln()
     pdf.ln(8)
