@@ -550,7 +550,6 @@ components.html(js_code, height=0)
 @st.dialog("Edit Booking")
 def edit_dialog(row):
     import sqlite3
-    # نقرأ بالاسم مو بالرقم - مستحيل يخربط مرة تانية
     conn = sqlite3.connect(DB)
     conn.row_factory = sqlite3.Row
     cur = conn.execute("SELECT * FROM bookings WHERE id=?", (row[0],))
@@ -563,11 +562,6 @@ def edit_dialog(row):
     def gv(k, default=""):
         v = d.get(k, default)
         return "" if v is None else str(v)
-
-    rc_val = 1
-    try: rc_val = int(float(gv("room_count","1") or "1"))
-    except: rc_val = 1
-    rc_val = max(1, min(20, rc_val))
 
     st.info(f"Editing booking #{d.get('id')} - {gv('company')}")
 
@@ -583,14 +577,19 @@ def edit_dialog(row):
 
     c5, c6 = st.columns(2)
     with c5: e_room = st.text_input("Room Type", value=gv("room_type"), key="dlg_room")
-    with c6: e_rc = st.number_input("Number of Rooms", 1, 20, rc_val, key="dlg_rc")
+    with c6:
+        # Number of Rooms: empty by default, empty = 0
+        cur_rc = gv("room_count")
+        init_val = "" if cur_rc in ["0", "1", "None", ""] else cur_rc
+        # اذا كان 1 قديم خليه فاضي متل ما طلبت
+        if cur_rc == "1":
+            init_val = ""
+        e_rc_text = st.text_input("Number of Rooms", value=init_val, placeholder="Empty = 0", key="dlg_rc")
 
-    # Hotel صار قائمة منسدلة معرفة قبل
     c7, c8 = st.columns(2)
     with c7:
         current_hotel = gv("hotel")
         if 'hotels_for_js' in globals() and hotels_for_js:
-            # اذا الفندق الحالي موجود بالقائمة حطو selected
             if current_hotel in hotels_for_js:
                 idx = hotels_for_js.index(current_hotel)
             else:
@@ -614,7 +613,6 @@ def edit_dialog(row):
     with c_air: e_air = st.text_input("Airline (empty=no flight)", value=gv("airline"), key="dlg_air")
     with c_vno: e_vno = st.text_input("Voucher No", value=gv("voucher_no"), key="dlg_vno")
 
-    # كلشي تحت صار مربعات مباشرة - بدون Show More
     c_dep, c_ret = st.columns(2)
     with c_dep: e_dep = st.text_input("Departure Time", value=gv("flight_dep_time"), placeholder="10:30", key="dlg_dep")
     with c_ret: e_ret = st.text_input("Return Time", value=gv("flight_ret_time"), placeholder="18:45", key="dlg_ret")
@@ -630,6 +628,13 @@ def edit_dialog(row):
     e_trans_co = st.text_input("Transport Company (empty=no transfer)", value=gv("transport_company"), key="dlg_transco")
 
     if st.button("Save", type="primary", use_container_width=True):
+        # Empty = 0 logic
+        try:
+            s = e_rc_text.strip()
+            e_rc_final = 0 if s == "" else int(float(s))
+        except:
+            e_rc_final = 0
+
         comp_full, comp_ok = smart_match(e_comp, agents_for_js, agents_upper)
         hotel_full, hotel_ok = smart_match(e_hotel, hotels_for_js, hotels_upper)
         is_no_flight = e_air.strip() == "" or e_air.strip() == "0"
@@ -648,11 +653,11 @@ def edit_dialog(row):
             notes=?, voucher_no=?, airline=?, emp=?, flight_dep_time=?, flight_ret_time=?,
             transport_company=?, flight_no_dep=?, flight_no_ret=?, dep_airport=?, ret_airport=?
             WHERE id=?""",
-            (e_sale, comp_full, e_pas, e_room, int(e_rc), hotel_full, e_entry, e_exit,
+            (e_sale, comp_full, e_pas, e_room, e_rc_final, hotel_full, e_entry, e_exit,
              to_f(e_pn), to_f(e_fl), to_f(e_tr), to_f(e_sell), e_notes, e_vno, air_full, e_emp,
              e_dep, e_ret, trans_full, e_fno_dep, e_fno_ret, e_dep_air, e_ret_air, d.get('id')))
         conn.commit(); conn.close()
-        with st.spinner("جاري التحديث في Google Sheet..."):
+        with st.spinner("Updating Google Sheet..."):
             sync_booking_to_sheet(d.get('id'))
         st.session_state.table_version += 1; st.rerun()
 @st.dialog("Invoice - معاينة الفاتورة", width="large")
