@@ -793,7 +793,7 @@ if st.button("SAVE SALE", type="primary", use_container_width=True):
                     st.session_state.do_clear=True; st.session_state.pending=None; st.rerun()
             with c2:
                 if st.button("NO", use_container_width=True): st.session_state.pending=None; st.rerun()
-    with r:
+with r:
         col_f1, col_f2, col_f3=st.columns([1.2, 1.2, 1.3])
         with col_f1: entry_date_val=st.date_input("entry_date_filter", value=None, key="entry_date_filter", label_visibility="collapsed")
         with col_f2: exit_date_val=st.date_input("exit_date_filter", value=None, key="exit_date_filter", label_visibility="collapsed")
