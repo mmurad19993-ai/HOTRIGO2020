@@ -469,28 +469,79 @@ def generate_agent_statement_excel(agent_name, bookings_df, payments_df):
     buffer = io.BytesIO()
     try: import openpyxl
     except: os.system("pip install openpyxl"); import openpyxl
+    from datetime import datetime
+
+    def _parse_date(d):
+        if not d: return None
+        for fmt in ("%Y-%m-%d","%d/%m/%Y","%d-%m-%Y","%Y/%m/%d"):
+            try: return datetime.strptime(str(d).strip(), fmt)
+            except: pass
+        return None
+
+    def _first_pax(pas):
+        if not pas: return ""
+        s = str(pas).replace('\r','\n').strip()
+        lines = [x.strip() for x in s.split('\n') if x.strip()]
+        return lines[0].split(',')[0].strip() if lines else ""
+
+    def _count_pax(pas):
+        if not pas: return 0
+        s = str(pas).replace('\r','\n').strip()
+        lines = [x.strip() for x in s.split('\n') if x.strip()]
+        if len(lines) > 1: return len(lines)
+        if ',' in s: return len([x for x in s.split(',') if x.strip()])
+        return 1 if s else 0
+
     total_sales = bookings_df['sell'].sum() if not bookings_df.empty and 'sell' in bookings_df.columns else 0
     total_payments = payments_df['amount'].sum() if not payments_df.empty and 'amount' in payments_df.columns else 0
     balance = total_sales - total_payments
+
+    # === الاعمدة الـ 12 يلي طلبتها ===
+    data = []
     if not bookings_df.empty:
-        cols_exist = [c for c in ['id','passengers','room_count','room_type','hotel','entry_date','exit_date','nights','sell','notes'] if c in bookings_df.columns]
-        book_export = bookings_df[cols_exist].copy()
-        rename_map = {'id':'رقم الحجز','passengers':'المسافر','room_count':'عدد الغرف','room_type':'نوع الغرف','hotel':'الفندق','entry_date':'الدخول','exit_date':'الخروج','nights':'ليالي','sell':'المبيع $','notes':'ملاحظة الحجز'}
-        book_export.rename(columns={k:v for k,v in rename_map.items() if k in book_export.columns}, inplace=True)
-    else: book_export = pd.DataFrame()
+        for _, r in bookings_df.iterrows():
+            ent = _parse_date(r.get('entry_date'))
+            ex = _parse_date(r.get('exit_date'))
+            nights = (ex - ent).days if ent and ex else ""
+            data.append({
+                'رقم الحجز': r.get('id',''),
+                'اسم الوكيل': r.get('company', agent_name),
+                'اسم اول مسافر': _first_pax(r.get('passengers','')),
+                'عدد الاشخاص': _count_pax(r.get('passengers','')),
+                'الفندق': r.get('hotel',''),
+                'نوع الغرف': r.get('room_type',''),
+                'عدد الغرف': r.get('room_count',''),
+                'تاريخ الدخول': r.get('entry_date',''),
+                'الليالي': nights,
+                'تاريخ الخروج': r.get('exit_date',''),
+                'سعر المبيع': r.get('sell',''),
+                'الملاحظة': r.get('notes',''),
+            })
+        book_export = pd.DataFrame(data)
+    else:
+        book_export = pd.DataFrame()
+
     if not payments_df.empty:
         cols_exist = [c for c in ['pay_date','amount','note'] if c in payments_df.columns]
         pay_export = payments_df[cols_exist].copy()
         rename_map = {'pay_date':'تاريخ الدفعة','amount':'قيمة الدفعة','note':'ملاحظة الدفعة'}
         pay_export.rename(columns={k:v for k,v in rename_map.items() if k in pay_export.columns}, inplace=True)
-    else: pay_export = pd.DataFrame()
+    else:
+        pay_export = pd.DataFrame()
+
     summary_df = pd.DataFrame([{'الوكيل': agent_name, 'اجمالي الحجوزات': total_sales, 'اجمالي الدفعات': total_payments, 'الرصيد المتبقي': balance}])
+
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        if not book_export.empty: book_export.to_excel(writer, sheet_name='الحجوزات', index=False)
-        else: pd.DataFrame([{'ملاحظة':'لا يوجد حجوزات'}]).to_excel(writer, sheet_name='الحجوزات', index=False)
-        if not pay_export.empty: pay_export.to_excel(writer, sheet_name='الدفعات', index=False)
-        else: pd.DataFrame([{'ملاحظة':'لا يوجد دفعات'}]).to_excel(writer, sheet_name='الدفعات', index=False)
+        if not book_export.empty:
+            book_export.to_excel(writer, sheet_name='الحجوزات', index=False)
+        else:
+            pd.DataFrame([{'ملاحظة':'لا يوجد حجوزات'}]).to_excel(writer, sheet_name='الحجوزات', index=False)
+        if not pay_export.empty:
+            pay_export.to_excel(writer, sheet_name='الدفعات', index=False)
+        else:
+            pd.DataFrame([{'ملاحظة':'لا يوجد دفعات'}]).to_excel(writer, sheet_name='الدفعات', index=False)
         summary_df.to_excel(writer, sheet_name='الملخص', index=False)
+
     buffer.seek(0)
     return buffer.getvalue(), total_sales, total_payments, balance
 
