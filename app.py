@@ -623,6 +623,7 @@ components.html(js_code, height=0)
 @st.dialog("Edit Booking")
 def edit_dialog(row):
     import sqlite3
+    import streamlit.components.v1 as components
     conn = sqlite3.connect(DB)
     conn.row_factory = sqlite3.Row
     cur = conn.execute("SELECT * FROM bookings WHERE id=?", (row[0],))
@@ -651,10 +652,8 @@ def edit_dialog(row):
     c5, c6 = st.columns(2)
     with c5: e_room = st.text_input("Room Type", value=gv("room_type"), key="dlg_room")
     with c6:
-        # Number of Rooms: empty by default, empty = 0
         cur_rc = gv("room_count")
         init_val = "" if cur_rc in ["0", "1", "None", ""] else cur_rc
-        # اذا كان 1 قديم خليه فاضي متل ما طلبت
         if cur_rc == "1":
             init_val = ""
         e_rc_text = st.text_input("Number of Rooms", value=init_val, placeholder="Empty = 0", key="dlg_rc")
@@ -700,8 +699,69 @@ def edit_dialog(row):
 
     e_trans_co = st.text_input("Transport Company (empty=no transfer)", value=gv("transport_company"), key="dlg_transco")
 
+    # ===== تحكم الأسهم بكل الجهات + Enter =====
+    components.html("""
+    <script>
+    const doc = window.parent.document;
+    function getDialogInputs(){
+        const dlg = doc.querySelector('div[data-testid="stDialog"]');
+        if(!dlg) return [];
+        // كل الحقول القابلة للتركيز جوا الدايلوغ
+        return Array.from(dlg.querySelectorAll('input, textarea, select, div[data-baseweb="select"] input'))
+               .filter(el => el.offsetParent !== null && !el.disabled);
+    }
+    function focusNext(current, dir){
+        const inputs = getDialogInputs();
+        const idx = inputs.indexOf(current);
+        if(idx === -1) return;
+        let n = idx + dir;
+        if(n < 0) n = 0;
+        if(n >= inputs.length){
+            // اذا وصلنا لآخر حقل اضغط Save
+            const saveBtn = doc.querySelector('div[data-testid="stDialog"] button[kind="primary"]');
+            if(saveBtn) saveBtn.click();
+            return;
+        }
+        inputs[n].focus();
+        if(inputs[n].select) inputs[n].select();
+    }
+    doc.addEventListener('keydown', function(e){
+        const dlg = doc.querySelector('div[data-testid="stDialog"]');
+        if(!dlg || !dlg.contains(doc.activeElement)) return;
+        const el = doc.activeElement;
+        const isTextArea = el.tagName === 'TEXTAREA';
+        
+        if(e.key === 'Enter' && !isTextArea){
+            e.preventDefault();
+            focusNext(el, 1);
+        } else if(e.key === 'ArrowDown'){
+            // في الـ textarea خليه يتحرك جوا النص الا اذا ضغط Ctrl
+            if(isTextArea && !e.ctrlKey) return;
+            e.preventDefault();
+            focusNext(el, 1);
+        } else if(e.key === 'ArrowUp'){
+            if(isTextArea && !e.ctrlKey) return;
+            e.preventDefault();
+            focusNext(el, -1);
+        } else if(e.key === 'ArrowRight'){
+            // اذا المؤشر بآخر الحقل انتقل لليمين
+            if(el.selectionStart === el.value.length || el.tagName !== 'INPUT'){
+                if(e.ctrlKey || el.selectionStart === el.value.length){
+                    e.preventDefault();
+                    focusNext(el, 1);
+                }
+            }
+        } else if(e.key === 'ArrowLeft'){
+            if(el.selectionStart === 0){
+                e.preventDefault();
+                focusNext(el, -1);
+            }
+        }
+    }, true);
+    </script>
+    """, height=0)
+
     if st.button("Save", type="primary", use_container_width=True):
-        # Empty = 0 logic
         try:
             s = e_rc_text.strip()
             e_rc_final = 0 if s == "" else int(float(s))
