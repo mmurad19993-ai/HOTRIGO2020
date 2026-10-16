@@ -1182,21 +1182,7 @@ with t2:
     st.dataframe(df_display, use_container_width=True, hide_index=True)
     st.divider()
 
-    col_pay1, col_pay2 = st.columns([1,2])
-    with col_pay1:
-        st.markdown("#### Add New Payment")
-        conn=sqlite3.connect(DB); agents_list=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]; conn.close()
-        pay_agent = st.selectbox("Select Agent", agents_list, key="pay_agent")
-        pay_date = st.date_input("Payment Date", datetime.now(), key="pay_date")
-        pay_amount = st.text_input("Amount $", key="pay_amount")
-        pay_note = st.text_input("Note", key="pay_note", placeholder="Bank transfer - Cash...")
-        if st.button("Add Payment", type="primary", use_container_width=True):
-            amt = to_f(pay_amount)
-            if not pay_agent or amt<=0: st.error("Select agent and valid amount")
-            else:
-                conn=sqlite3.connect(DB); conn.execute("INSERT INTO agent_payments (agent, pay_date, amount, note) VALUES (?,?,?,?)", (pay_agent, str(pay_date), amt, pay_note)); conn.commit(); conn.close()
-                st.success(f"Added ${amt} to {pay_agent}"); st.rerun()
-    with col_pay2:
+        with col_pay2:
         st.markdown("#### Balances Summary")
         conn=sqlite3.connect(DB)
         summary = pd.read_sql("SELECT b.company as Agent, SUM(b.sell) as Total_Sales, (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Total_Paid, SUM(b.sell) - (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Balance FROM bookings b GROUP BY b.company", conn)
