@@ -785,7 +785,7 @@ with t1:
             c_air_dep, c_air_ret = st.columns(2)
             with c_air_dep: dep_airport=st.text_input("Departure Airport", key="dep_airport", placeholder="IST")
             with c_air_ret: ret_airport=st.text_input("Return Airport", key="ret_airport", placeholder="BEY")
-                transport_co=st.text_input("Transport Company (empty=no transfer)", key="transport_co", placeholder="")
+            transport_co=st.text_input("Transport Company (empty=no transfer)", key="transport_co", placeholder="")
             else:
                 ht_tot=to_f(pn)*to_f(nights)*to_f(room_count)
                 cost=ht_tot+to_f(fl)+to_f(tr)
