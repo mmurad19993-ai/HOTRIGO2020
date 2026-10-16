@@ -1044,20 +1044,30 @@ if view_btn:
                 st.markdown(f"<h3 style='text-align:center; font-weight:900; margin:0;'>{d.get('company','')}</h3>", unsafe_allow_html=True)
                 st.divider()
                 
-                # --- القسم الاول - فوق ---
-                st.markdown(f"**Passengers:** {d.get('passengers','')}")
+                # بوكس للمسافرين مع سكرول لـ 20+ مسافر
+                st.markdown("""
+                <style>
+                .pax-box {max-height:150px; overflow-y:auto; border:1px solid #ddd; border-radius:6px; padding:8px; background:#f9f9f9; font-size:13px; white-space:pre-line;}
+                </style>
+                """, unsafe_allow_html=True)
+                pax = f"<div class='pax-box'>{d.get('passengers','')}</div>"
+
+                # --- فوق ---
+                st.markdown("**Passengers:**")
+                st.markdown(pax, unsafe_allow_html=True)
                 st.markdown(f"**Hotel:** {d.get('hotel','')}")
                 st.markdown(f"**Check-in:** {d.get('entry_date','')}")
                 st.markdown(f"**Departure:** {d.get('flight_dep_time','')} {d.get('dep_airport','')}")
                 st.markdown(f"Flight No: **{d.get('flight_no_dep','')}**")
                 
-                # --- فراغ كبير للسكرول ---
-                st.markdown("<div style='height:350px;'></div>", unsafe_allow_html=True)
+                # --- مسافة صغيرة ---
+                st.markdown("<div style='height:60px;'></div>", unsafe_allow_html=True)
                 st.divider()
                 
-                # --- القسم الثاني - تحت بعد السكرول ---
+                # --- تحت ---
                 st.markdown(f"**Hotel:** {d.get('hotel','')}")
-                st.markdown(f"**Passengers:** {d.get('passengers','')}")
+                st.markdown("**Passengers:**")
+                st.markdown(pax, unsafe_allow_html=True)
                 st.markdown(f"**Check-out:** {d.get('exit_date','')}")
                 st.markdown(f"**Return:** {d.get('flight_ret_time','')} {d.get('ret_airport','')}")
                 st.markdown(f"Flight No: **{d.get('flight_no_ret','')}**")
