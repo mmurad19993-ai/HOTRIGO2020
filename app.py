@@ -1309,77 +1309,124 @@ with t2:
         buf=BytesIO(); pdf.output(buf); return buf.getvalue()
 
     def generate_excel_bytes(pay_agent):
-        from io import BytesIO
-        conn=sqlite3.connect(DB)
-        df1=pd.read_sql("SELECT * FROM bookings WHERE company=?", conn, params=(pay_agent,))
-        df2=pd.read_sql("SELECT * FROM agent_payments WHERE agent=?", conn, params=(pay_agent,))
-        conn.close()
-        output=BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df1.to_excel(writer, sheet_name='Bookings', index=False)
-            df2.to_excel(writer, sheet_name='Payments', index=False)
-        return output.getvalue()
+    from io import BytesIO
+    from datetime import datetime
+    import pandas as pd
+    import sqlite3
 
     conn=sqlite3.connect(DB)
-    agents_list=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]
+    df1=pd.read_sql("SELECT * FROM bookings WHERE company=?", conn, params=(pay_agent,))
+    df2=pd.read_sql("SELECT * FROM agent_payments WHERE agent=?", conn, params=(pay_agent,))
     conn.close()
 
-    left_side, right_side = st.columns([1, 1], gap="large")
+    def _parse_date(d):
+        if not d or pd.isna(d): return None
+        for fmt in ("%Y-%m-%d","%d/%m/%Y","%d-%m-%Y","%Y/%m/%d"):
+            try: return datetime.strptime(str(d).strip(), fmt)
+            except: pass
+        return None
+    def _first_pax(pas):
+        if not pas or pd.isna(pas): return ""
+        s=str(pas).replace('\r','\n').strip()
+        lines=[x.strip() for x in s.split('\n') if x.strip()]
+        return lines[0].split(',')[0].strip() if lines else ""
+    def _count_pax(pas):
+        if not pas or pd.isna(pas): return 0
+        s=str(pas).replace('\r','\n').strip()
+        lines=[x.strip() for x in s.split('\n') if x.strip()]
+        if len(lines)>1: return len(lines)
+        if ',' in s: return len([x for x in s.split(',') if x.strip()])
+        return 1 if s else 0
 
-    with left_side:
-        narrow, gap = st.columns([0.40, 0.60])
-        with narrow:
-            st.markdown("#### Add New Payment")
-            pay_agent=st.selectbox("Select Agent",agents_list,key="pay_agent_main")
-            pay_date=st.date_input("Payment Date",datetime.now(),key="pay_date_main")
-            pay_amount=st.text_input("Amount $",key="pay_amount_main", placeholder="$ Amount")
-            pay_note=st.text_input("Note",key="pay_note_main", placeholder="Bank transfer - Cash...")
+    data=[]
+    for _, r in df1.iterrows():
+        ent=_parse_date(r.get('entry_date')); ex=_parse_date(r.get('exit_date'))
+        nights=(ex-ent).days if ent and ex else ""
+        data.append({
+            'رقم الحجز': r.get('id',''),
+            'اسم الوكيل': r.get('company', pay_agent),
+            'اسم اول مسافر': _first_pax(r.get('passengers','')),
+            'عدد الاشخاص': _count_pax(r.get('passengers','')),
+            'الفندق': r.get('hotel',''),
+            'نوع الغرف': r.get('room_type',''),
+            'عدد الغرف': r.get('room_count',''),
+            'تاريخ الدخول': r.get('entry_date',''),
+            'الليالي': nights,
+            'تاريخ الخروج': r.get('exit_date',''),
+            'سعر المبيع': r.get('sell',''),
+            'الملاحظة': r.get('notes',''),
+        })
+    book_export = pd.DataFrame(data) if data else pd.DataFrame([{'ملاحظة':'لا يوجد حجوزات'}])
+    pay_export = df2 if not df2.empty else pd.DataFrame([{'ملاحظة':'لا يوجد دفعات'}])
 
-            if st.button("Add Payment", use_container_width=True, type="primary", key="btn_add_pay_main"):
-                amt = to_f_local(pay_amount)
-                if amt <= 0:
-                    st.error("Please enter valid amount")
-                else:
-                    try:
-                        conn=sqlite3.connect(DB)
-                        conn.execute("""
-                            CREATE TABLE IF NOT EXISTS agent_payments (
-                                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                agent TEXT,
-                                pay_date TEXT,
-                                amount REAL,
-                                note TEXT
-                            )
-                        """)
-                        conn.execute(
-                            "INSERT INTO agent_payments (agent, pay_date, amount, note) VALUES (?,?,?,?)",
-                            (pay_agent, str(pay_date), amt, pay_note)
+    output=BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        book_export.to_excel(writer, sheet_name='الحجوزات', index=False)
+        pay_export.to_excel(writer, sheet_name='المدفوعات', index=False)
+    output.seek(0)
+    return output.getvalue()
+
+# ==== هاد الكود لازم يكون برا الفانكشن بدون مسافة ====
+conn=sqlite3.connect(DB)
+agents_list=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]
+conn.close()
+
+left_side, right_side = st.columns([1, 1], gap="large")
+
+with left_side:
+    narrow, gap = st.columns([0.40, 0.60])
+    with narrow:
+        st.markdown("#### Add New Payment")
+        pay_agent=st.selectbox("Select Agent",agents_list,key="pay_agent_main")
+        pay_date=st.date_input("Payment Date",datetime.now(),key="pay_date_main")
+        pay_amount=st.text_input("Amount $",key="pay_amount_main", placeholder="$ Amount")
+        pay_note=st.text_input("Note",key="pay_note_main", placeholder="Bank transfer - Cash...")
+
+        if st.button("Add Payment", use_container_width=True, type="primary", key="btn_add_pay_main"):
+            amt = to_f_local(pay_amount)
+            if amt <= 0:
+                st.error("Please enter valid amount")
+            else:
+                try:
+                    conn=sqlite3.connect(DB)
+                    conn.execute("""
+                        CREATE TABLE IF NOT EXISTS agent_payments (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            agent TEXT,
+                            pay_date TEXT,
+                            amount REAL,
+                            note TEXT
                         )
-                        conn.commit(); conn.close()
-                        st.success(f"Added ${amt} for {pay_agent}")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"DB Error: {e}")
+                    """)
+                    conn.execute(
+                        "INSERT INTO agent_payments (agent, pay_date, amount, note) VALUES (?,?,?,?)",
+                        (pay_agent, str(pay_date), amt, pay_note)
+                    )
+                    conn.commit(); conn.close()
+                    st.success(f"Added ${amt} for {pay_agent}")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"DB Error: {e}")
 
-            try:
-                pdf_bytes = generate_pdf_bytes(pay_agent)
-            except:
-                pdf_bytes = None
-            try:
-                excel_bytes = generate_excel_bytes(pay_agent)
-            except:
-                excel_bytes = None
+        try:
+            pdf_bytes = generate_pdf_bytes(pay_agent)
+        except:
+            pdf_bytes = None
+        try:
+            excel_bytes = generate_excel_bytes(pay_agent)
+        except Exception as e:
+            print(e)
+            excel_bytes = None
 
-            b1, b2 = st.columns(2, gap="small")
-            with b1:
-                if pdf_bytes:
-                    st.download_button("🖨️ Print PDF", data=pdf_bytes, file_name=f"HOTRIGO_{pay_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key=f"dl_pdf_one_{pay_agent}")
-                else:
-                    st.button("🖨️ Print PDF", disabled=True, use_container_width=True, key=f"dis_pdf_{pay_agent}")
-            with b2:
-                if excel_bytes:
-                    st.download_button("📊 Export Excel", data=excel_bytes, file_name=f"HOTRIGO_{pay_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_excel_one_{pay_agent}")
-
+        b1, b2 = st.columns(2, gap="small")
+        with b1:
+            if pdf_bytes:
+                st.download_button("🖨️ Print PDF", data=pdf_bytes, file_name=f"HOTRIGO_{pay_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key=f"dl_pdf_one_{pay_agent}")
+            else:
+                st.button("🖨️ Print PDF", disabled=True, use_container_width=True, key=f"dis_pdf_{pay_agent}")
+        with b2:
+            if excel_bytes:
+                st.download_button("📊 Export Excel", data=excel_bytes, file_name=f"HOTRIGO_{pay_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_excel_one_{pay_agent}")
     with right_side:
         # === فوق : Agents Summary ===
         st.markdown("#### 💰 Agents Summary")
