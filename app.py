@@ -752,7 +752,7 @@ with t1:
         airline=st.text_input("Airline (empty=no flight)", key="airline", placeholder="")
         vno=st.text_input("Voucher No", key="vno")
 
-        with st.expander("➕ Show More / باقي المعلومات - المزيد", expanded=False):
+        with st.expander("➕ Show More", expanded=False):
             c_dep, c_ret=st.columns(2)
             with c_dep: dep_time=st.text_input("Departure Time", key="dep_time", placeholder="10:30")
             with c_ret: ret_time=st.text_input("Return Time", key="ret_time", placeholder="18:45")
