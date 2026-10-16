@@ -1147,7 +1147,17 @@ with t2:
         df_display = build_statement(df_raw.copy())
 st.divider()
 
-# ===== تقسيم طرفين =====
+# تصغير كل الحقول
+st.markdown("""
+<style>
+[data-testid="stSelectbox"] div[data-baseweb="select"]{min-height:30px !important; height:30px !important;}
+[data-testid="stDateInput"] input, [data-testid="stTextInput"] input{height:28px !important; min-height:28px !important; padding:0 8px !important; font-size:13px !important;}
+[data-testid="stSelectbox"] label, [data-testid="stDateInput"] label, [data-testid="stTextInput"] label{font-size:11px !important; margin:0 !important; padding:0 !important;}
+[data-testid="stVerticalBlock"]{gap:4px !important;}
+[data-testid="stButton"] button{height:30px !important; min-height:30px !important; font-size:12px !important;}
+</style>
+""", unsafe_allow_html=True)
+
 left_side, right_side = st.columns([1.5, 1], gap="large")
 
 # ========== يسار - Add New Payment ==========
@@ -1157,24 +1167,18 @@ with left_side:
     agents_list=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]
     conn.close()
 
-    # 1- الزرين فوق - قبل اسم الوكيل
     top_b1, top_b2 = st.columns(2, gap="small")
-    # هنعبيهن بعد ما نعرف pay_agent - بس نحجز مكانن هون فوق
     with top_b1:
         pdf_top_holder = st.container()
     with top_b2:
         excel_top_holder = st.container()
 
-    # 2- اسم الوكيل
     pay_agent=st.selectbox("Select Agent",agents_list,key=f"pay_agent_{view_agent}",index=agents_list.index(view_agent) if view_agent in agents_list else 0)
-
-    # 3- الحقول تحت بعض - عمودي
     pay_date=st.date_input("Payment Date",datetime.now(),key=f"pay_date_{view_agent}")
     pay_amount=st.text_input("Amount $",key=f"pay_amount_{view_agent}", placeholder="$ Amount")
     pay_note=st.text_input("Note",key=f"pay_note_{view_agent}", placeholder="Bank transfer - Cash...")
 
     if pay_agent:
-        # عبي الزرين الفوقانيين
         with pdf_top_holder:
             if st.button("🖨️ Print PDF",use_container_width=True,key=f"btn_pdf_add_{pay_agent}"):
                 try:
@@ -1242,7 +1246,6 @@ with left_side:
             except Exception as e:
                 st.error(f"Excel Error: {e}")
 
-    # زر الإضافة
     if st.button("Add Payment",type="primary",use_container_width=True,key=f"btn_add_pay_{pay_agent}"):
         amt=to_f(pay_amount)
         if not pay_agent or amt<=0:
