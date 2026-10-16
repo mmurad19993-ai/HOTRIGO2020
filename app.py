@@ -1092,14 +1092,9 @@ if view_btn:
 with t2:
     st.divider()
 
-    st.markdown("""
-    <style>
-    div[data-testid="stSelectbox"] div[data-baseweb="select"]{min-height:42px !important; height:42px !important;}
-    div[data-testid="stDateInput"] input, div[data-testid="stTextInput"] input{height:42px !important; min-height:42px !important; font-size:14px !important;}
-    div[data-testid="stSelectbox"] label, div[data-testid="stDateInput"] label, div[data-testid="stTextInput"] label{font-size:13px !important; margin-bottom:4px !important;}
-    div[data-testid="stButton"] button, div[data-testid="stDownloadButton"] button{height:38px !important; min-height:38px !important; font-size:13px !important;}
-    </style>
-    """, unsafe_allow_html=True)
+    def to_f_local(x):
+        try: return float(str(x).replace('$','').replace(',','').strip() or 0)
+        except: return 0
 
     left_side, right_side = st.columns([1, 1], gap="large")
 
@@ -1127,44 +1122,30 @@ with t2:
                         total_paid_pdf=df_pays_pdf['amount'].sum() if not df_pays_pdf.empty else 0
                         df_raw_for_pdf = pd.read_sql("SELECT * FROM bookings WHERE company=?", conn, params=(pay_agent,))
                         conn.close()
-                        df_pdf_source = build_statement(df_raw_for_pdf.copy()) if not df_raw_for_pdf.empty else pd.DataFrame()
-                        if df_pdf_source.empty:
-                            st.error(f"No bookings for {pay_agent}")
-                            st.stop()
+                        if df_raw_for_pdf.empty:
+                            st.error(f"No bookings for {pay_agent}"); st.stop()
+                        sell_c=None
+                        for c in df_raw_for_pdf.columns:
+                            if 'sell' in c.lower() or 'price' in c.lower(): sell_c=c; break
+                        total_sell = df_raw_for_pdf[sell_c].apply(to_f_local).sum() if sell_c else 0
                         class PDF(FPDF):
                             def header(self):
                                 self.set_font("Arial","B",26);self.set_text_color(13,71,161);self.cell(0,14,"HOTRIGO",ln=True,align='C')
-                                self.set_font("Arial","",10);self.set_text_color(90,90,90);self.cell(0,5,"Travel Management System",ln=True,align='C')
                                 self.ln(2);self.set_draw_color(13,71,161);self.set_line_width(0.8);self.line(10,self.get_y(),287,self.get_y());self.ln(6)
                             def footer(self):
                                 self.set_y(-15);self.set_font("Arial","I",7);self.set_text_color(150,150,150);self.cell(0,10,f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')} | HOTRIGO - {pay_agent}",align='C')
                         pdf=PDF(orientation='L',unit='mm',format='A4');pdf.set_auto_page_break(auto=True,margin=20);pdf.add_page()
                         pdf.set_font("Arial","B",14);pdf.cell(0,10,f"Agent Statement - {pay_agent}",ln=True,align='C');pdf.ln(4)
-                        df_pdf=df_pdf_source[["Booking ID","Passenger Names","Pax Count","Hotel","Rooms","Check-in","Check-out","Nights","Sell Price","Note"]].copy()
-                        cols=["Booking ID","Passenger Names","Pax","Hotel","Rooms","Check-in","Check-out","Nights","Sell Price","Note"];col_widths=[22,55,10,40,12,22,22,12,22,35]
-                        pdf.set_font("Arial","B",8);pdf.set_fill_color(13,71,161);pdf.set_text_color(255,255,255)
-                        for i,col in enumerate(cols): pdf.cell(col_widths[i],9,col,border=1,align='C',fill=True)
-                        pdf.ln();pdf.set_font("Arial","",7.5);pdf.set_text_color(30,30,30);fill=False;total_sell=0
-                        for _,row in df_pdf.iterrows():
-                            if pdf.get_y()>180:pdf.add_page()
-                            pdf.set_fill_color(232,240,255) if fill else pdf.set_fill_color(255,255,255)
-                            try:sell_val=float(str(row['Sell Price']).replace('$','').replace(',','') or 0);total_sell+=sell_val;sell_str=f"${sell_val:.2f}"
-                            except:sell_str=str(row['Sell Price'])
-                            vals=[str(row["Booking ID"]),str(row["Passenger Names"])[:45],str(row["Pax Count"]),str(row["Hotel"])[:22],str(row["Rooms"]),str(row["Check-in"]),str(row["Check-out"]),str(row["Nights"]),sell_str,str(row["Note"])[:25]]
-                            for j,val in enumerate(vals): pdf.cell(col_widths[j],8,val,border=1,align='C',fill=True)
-                            pdf.ln();fill=not fill
-                        pdf.ln(3);pdf.set_font("Arial","B",10);pdf.set_fill_color(13,71,161);pdf.set_text_color(255,255,255);pdf.cell(195,10," TOTAL SALES",border=1,align='L',fill=True)
-                        pdf.set_fill_color(255,235,59);pdf.set_text_color(0,0,0);pdf.cell(22,10,f"${total_sell:.2f}",border=1,align='C',fill=True);pdf.cell(35,10,"",border=1,fill=True);pdf.ln(10)
+                        pdf.set_font("Arial","B",9);pdf.set_fill_color(13,71,161);pdf.set_text_color(255,255,255)
+                        pdf.cell(0,10,f"Total Sales: ${total_sell:.2f} | Paid: ${total_paid_pdf:.2f} | Balance: ${total_sell-total_paid_pdf:.2f}",border=1,align='C',fill=True);pdf.ln(12)
                         if not df_pays_pdf.empty:
                             pdf.set_font("Arial","B",11);pdf.set_text_color(13,71,161);pdf.cell(0,8,f"Payment History - {pay_agent}",ln=True);pdf.ln(1)
                             pdf.set_font("Arial","B",8);pdf.set_fill_color(0,150,64);pdf.set_text_color(255,255,255)
                             pdf.cell(40,9,"Date",border=1,align='C',fill=True);pdf.cell(30,9,"Amount",border=1,align='C',fill=True);pdf.cell(182,9,"Note",border=1,align='C',fill=True);pdf.ln()
-                            pdf.set_font("Arial","",8);pdf.set_text_color(0,0,0);fill2=False
+                            pdf.set_font("Arial","",8);pdf.set_text_color(0,0,0)
                             for _,prow in df_pays_pdf.iterrows():
                                 if pdf.get_y()>180:pdf.add_page()
-                                pdf.set_fill_color(232,255,232) if fill2 else pdf.set_fill_color(255,255,255)
-                                pdf.cell(40,8,str(prow['pay_date']),border=1,align='C',fill=True);pdf.cell(30,8,f"${float(prow['amount']):.2f}",border=1,align='C',fill=True);pdf.cell(182,8,str(prow['note'])[:80],border=1,align='L',fill=True);pdf.ln();fill2=not fill2
-                            pdf.ln(3);pdf.set_font("Arial","B",10);pdf.set_fill_color(0,150,64);pdf.set_text_color(255,255,255);pdf.cell(0,10,f" Total Paid: ${float(total_paid_pdf):.2f} | Balance: ${total_sell-float(total_paid_pdf):.2f}",border=1,fill=True);pdf.ln()
+                                pdf.cell(40,8,str(prow['pay_date']),border=1,align='C');pdf.cell(30,8,f"${float(prow['amount']):.2f}",border=1,align='C');pdf.cell(182,8,str(prow['note'])[:80],border=1,align='L');pdf.ln()
                         pdf_buffer=BytesIO();pdf.output(pdf_buffer);st.session_state[f"pdf_data_add_{pay_agent}"]=pdf_buffer.getvalue();st.toast("PDF Ready!",icon="✅")
                     except Exception as e:
                         st.error(f"PDF Error: {e}")
@@ -1180,24 +1161,22 @@ with t2:
                     df_pays_excel=pd.read_sql("SELECT pay_date as Date,amount as Amount,note as Note FROM agent_payments WHERE agent=? ORDER BY pay_date",conn,params=(pay_agent,))
                     df_raw_excel=pd.read_sql("SELECT * FROM bookings WHERE company=?",conn,params=(pay_agent,))
                     conn.close()
-                    df_excel_source=build_statement(df_raw_excel.copy()) if not df_raw_excel.empty else pd.DataFrame()
                     with pd.ExcelWriter(output,engine='openpyxl') as writer:
-                        if not df_excel_source.empty: df_excel_source.to_excel(writer,index=False,sheet_name="Bookings")
+                        if not df_raw_excel.empty: df_raw_excel.to_excel(writer,index=False,sheet_name="Bookings")
                         df_pays_excel.to_excel(writer,index=False,sheet_name="Payments")
                     st.download_button("📊 Export Excel",output.getvalue(),file_name=f"HOTRIGO_{pay_agent}_statement.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",use_container_width=True,key=f"dl_excel_add_{pay_agent}")
                 except Exception as e:
                     st.error(f"Excel Error: {e}")
 
             if st.button("Add Payment",type="primary",use_container_width=True,key=f"btn_add_pay_{pay_agent}"):
-                amt=to_f(pay_amount)
-                if not pay_agent or amt<=0:
-                    st.error("Please select agent and valid amount")
+                amt=to_f_local(pay_amount)
+                if not pay_agent or amt<=0: st.error("Please select agent and valid amount")
                 else:
                     conn=sqlite3.connect(DB)
                     conn.execute("INSERT INTO agent_payments (agent,pay_date,amount,note) VALUES (?,?,?,?)",(pay_agent,str(pay_date),amt,pay_note))
                     conn.commit();conn.close()
                     if f"pdf_data_add_{pay_agent}" in st.session_state: del st.session_state[f"pdf_data_add_{pay_agent}"]
-                    st.success(f"Added ${amt} for agent {pay_agent}");st.rerun()
+                    st.success(f"Added ${amt}");st.rerun()
 
     with right_side:
         st.markdown("#### 💰 Agents Summary")
@@ -1206,15 +1185,13 @@ with t2:
             df_all_bookings=pd.read_sql("SELECT * FROM bookings",conn)
             df_all_pays=pd.read_sql("SELECT agent, SUM(amount) as total_paid FROM agent_payments GROUP BY agent",conn)
             conn.close()
+            sell_c_all=None
+            for c in df_all_bookings.columns:
+                if 'sell' in c.lower() or 'price' in c.lower(): sell_c_all=c; break
             summary=[]
             for ag in agents_list:
                 df_ag = df_all_bookings[df_all_bookings['company']==ag] if not df_all_bookings.empty else pd.DataFrame()
-                total_sales=0
-                if not df_ag.empty:
-                    df_state=build_statement(df_ag.copy())
-                    for _, rr in df_state.iterrows():
-                        try: total_sales+=float(str(rr['Sell Price']).replace('$','').replace(',','') or 0)
-                        except: pass
+                total_sales = df_ag[sell_c_all].apply(to_f_local).sum() if not df_ag.empty and sell_c_all else 0
                 paid_row = df_all_pays[df_all_pays['agent']==ag] if not df_all_pays.empty else pd.DataFrame()
                 total_paid = float(paid_row['total_paid'].values[0]) if not paid_row.empty else 0
                 summary.append({"Agent":ag, "Sales":total_sales, "Paid":total_paid, "Balance":total_sales-total_paid})
@@ -1227,6 +1204,7 @@ with t2:
         except Exception as e:
             st.error(f"Summary Error: {e}")
 
+# ============== T3 - 4 عواميد جنب بعض بنفس السطر ==============
 with t3:
     st.markdown("### ⚙️ Definitions - تعريف البيانات الأساسية")
     st.divider()
@@ -1237,61 +1215,69 @@ with t3:
     conn.execute("CREATE TABLE IF NOT EXISTS transport_companies (name TEXT PRIMARY KEY)")
     conn.commit()
     conn.close()
-    c1, c2 = st.columns(2, gap="large")
-    c3, c4 = st.columns(2, gap="large")
+
+    c1, c2, c3, c4 = st.columns(4, gap="medium")
+
     with c1:
-        st.markdown("#### 👥 Agents")
-        na = st.text_input("New Agent", key="na_def_t3", placeholder="Agent name...")
-        if st.button("Add Agent", key="add_a_t3", use_container_width=True) and na.strip():
-            conn=sqlite3.connect(DB)
-            try: conn.execute("INSERT INTO agents (name) VALUES (?)", (na.strip().upper(),)); conn.commit(); st.success("Added")
-            except: st.error("Exists")
-            conn.close(); st.rerun()
-        conn=sqlite3.connect(DB); dfa=pd.read_sql("SELECT name as Agents FROM agents ORDER BY name", conn); conn.close()
-        st.dataframe(dfa, use_container_width=True, height=280)
-        if not dfa.empty:
-            da=st.selectbox("Delete Agent", dfa['Agents'].tolist(), key="del_a_t3")
-            if st.button("🗑️ Delete Agent", key="delb_a_t3"):
-                conn=sqlite3.connect(DB); conn.execute("DELETE FROM agents WHERE name=?", (da,)); conn.commit(); conn.close(); st.rerun()
+        with st.container(border=True):
+            st.markdown("#### 👥 Agents")
+            na = st.text_input("Agent", key="na_4col", placeholder="Agent name...", label_visibility="collapsed")
+            if st.button("Add Agent", key="add_a_4col", use_container_width=True) and na.strip():
+                conn=sqlite3.connect(DB)
+                try: conn.execute("INSERT INTO agents (name) VALUES (?)", (na.strip().upper(),)); conn.commit()
+                except: pass
+                conn.close(); st.rerun()
+            conn=sqlite3.connect(DB); dfa=pd.read_sql("SELECT name as Agents FROM agents ORDER BY name", conn); conn.close()
+            st.dataframe(dfa, use_container_width=True, height=250, hide_index=True)
+            if not dfa.empty:
+                da=st.selectbox("Del", dfa['Agents'].tolist(), key="del_a_4col", label_visibility="collapsed")
+                if st.button("🗑️ Delete", key="delb_a_4col", use_container_width=True):
+                    conn=sqlite3.connect(DB); conn.execute("DELETE FROM agents WHERE name=?", (da,)); conn.commit(); conn.close(); st.rerun()
+
     with c2:
-        st.markdown("#### 🏨 Hotels")
-        nh = st.text_input("New Hotel", key="nh_def_t3", placeholder="Hotel name...")
-        if st.button("Add Hotel", key="add_h_t3", use_container_width=True) and nh.strip():
-            conn=sqlite3.connect(DB)
-            try: conn.execute("INSERT INTO hotels (name) VALUES (?)", (nh.strip(),)); conn.commit()
-            except: pass
-            conn.close(); st.rerun()
-        conn=sqlite3.connect(DB); dfh=pd.read_sql("SELECT name as Hotels FROM hotels ORDER BY name", conn); conn.close()
-        st.dataframe(dfh, use_container_width=True, height=280)
-        if not dfh.empty:
-            dh=st.selectbox("Delete Hotel", dfh['Hotels'].tolist(), key="del_h_t3")
-            if st.button("🗑️ Delete Hotel", key="delb_h_t3"):
-                conn=sqlite3.connect(DB); conn.execute("DELETE FROM hotels WHERE name=?", (dh,)); conn.commit(); conn.close(); st.rerun()
+        with st.container(border=True):
+            st.markdown("#### 🏨 Hotels")
+            nh = st.text_input("Hotel", key="nh_4col", placeholder="Hotel name...", label_visibility="collapsed")
+            if st.button("Add Hotel", key="add_h_4col", use_container_width=True) and nh.strip():
+                conn=sqlite3.connect(DB)
+                try: conn.execute("INSERT INTO hotels (name) VALUES (?)", (nh.strip(),)); conn.commit()
+                except: pass
+                conn.close(); st.rerun()
+            conn=sqlite3.connect(DB); dfh=pd.read_sql("SELECT name as Hotels FROM hotels ORDER BY name", conn); conn.close()
+            st.dataframe(dfh, use_container_width=True, height=250, hide_index=True)
+            if not dfh.empty:
+                dh=st.selectbox("Del", dfh['Hotels'].tolist(), key="del_h_4col", label_visibility="collapsed")
+                if st.button("🗑️ Delete", key="delb_h_4col", use_container_width=True):
+                    conn=sqlite3.connect(DB); conn.execute("DELETE FROM hotels WHERE name=?", (dh,)); conn.commit(); conn.close(); st.rerun()
+
     with c3:
-        st.markdown("#### ✈️ Airlines")
-        nal = st.text_input("New Airline", key="nal_def_t3", placeholder="e.g. Turkish Airlines")
-        if st.button("Add Airline", key="add_al_t3", use_container_width=True) and nal.strip():
-            conn=sqlite3.connect(DB)
-            try: conn.execute("INSERT INTO airlines (name) VALUES (?)", (nal.strip(),)); conn.commit()
-            except: pass
-            conn.close(); st.rerun()
-        conn=sqlite3.connect(DB); dfal=pd.read_sql("SELECT name as Airlines FROM airlines ORDER BY name", conn); conn.close()
-        st.dataframe(dfal, use_container_width=True, height=280)
-        if not dfal.empty:
-            dal=st.selectbox("Delete Airline", dfal['Airlines'].tolist(), key="del_al_t3")
-            if st.button("🗑️ Delete Airline", key="delb_al_t3"):
-                conn=sqlite3.connect(DB); conn.execute("DELETE FROM airlines WHERE name=?", (dal,)); conn.commit(); conn.close(); st.rerun()
+        with st.container(border=True):
+            st.markdown("#### ✈️ Airlines")
+            nal = st.text_input("Airline", key="nal_4col", placeholder="e.g. Turkish Airlines", label_visibility="collapsed")
+            if st.button("Add Airline", key="add_al_4col", use_container_width=True) and nal.strip():
+                conn=sqlite3.connect(DB)
+                try: conn.execute("INSERT INTO airlines (name) VALUES (?)", (nal.strip(),)); conn.commit()
+                except: pass
+                conn.close(); st.rerun()
+            conn=sqlite3.connect(DB); dfal=pd.read_sql("SELECT name as Airlines FROM airlines ORDER BY name", conn); conn.close()
+            st.dataframe(dfal, use_container_width=True, height=250, hide_index=True)
+            if not dfal.empty:
+                dal=st.selectbox("Del", dfal['Airlines'].tolist(), key="del_al_4col", label_visibility="collapsed")
+                if st.button("🗑️ Delete", key="delb_al_4col", use_container_width=True):
+                    conn=sqlite3.connect(DB); conn.execute("DELETE FROM airlines WHERE name=?", (dal,)); conn.commit(); conn.close(); st.rerun()
+
     with c4:
-        st.markdown("#### 🚌 Transport")
-        nt = st.text_input("New Transport", key="nt_def_t3", placeholder="e.g. Metro Turizm")
-        if st.button("Add Transport", key="add_t_t3", use_container_width=True) and nt.strip():
-            conn=sqlite3.connect(DB)
-            try: conn.execute("INSERT INTO transport_companies (name) VALUES (?)", (nt.strip(),)); conn.commit()
-            except: pass
-            conn.close(); st.rerun()
-        conn=sqlite3.connect(DB); dft=pd.read_sql("SELECT name as Transport FROM transport_companies ORDER BY name", conn); conn.close()
-        st.dataframe(dft, use_container_width=True, height=280)
-        if not dft.empty:
-            dt=st.selectbox("Delete Transport", dft['Transport'].tolist(), key="del_t_t3")
-            if st.button("🗑️ Delete Transport", key="delb_t_t3"):
-                conn=sqlite3.connect(DB); conn.execute("DELETE FROM transport_companies WHERE name=?", (dt,)); conn.commit(); conn.close(); st.rerun()
+        with st.container(border=True):
+            st.markdown("#### 🚌 Transport")
+            nt = st.text_input("Transport", key="nt_4col", placeholder="e.g. Metro Turizm", label_visibility="collapsed")
+            if st.button("Add Transport", key="add_t_4col", use_container_width=True) and nt.strip():
+                conn=sqlite3.connect(DB)
+                try: conn.execute("INSERT INTO transport_companies (name) VALUES (?)", (nt.strip(),)); conn.commit()
+                except: pass
+                conn.close(); st.rerun()
+            conn=sqlite3.connect(DB); dft=pd.read_sql("SELECT name as Transport FROM transport_companies ORDER BY name", conn); conn.close()
+            st.dataframe(dft, use_container_width=True, height=250, hide_index=True)
+            if not dft.empty:
+                dt=st.selectbox("Del", dft['Transport'].tolist(), key="del_t_4col", label_visibility="collapsed")
+                if st.button("🗑️ Delete", key="delb_t_4col", use_container_width=True):
+                    conn=sqlite3.connect(DB); conn.execute("DELETE FROM transport_companies WHERE name=?", (dt,)); conn.commit(); conn.close(); st.rerun()
