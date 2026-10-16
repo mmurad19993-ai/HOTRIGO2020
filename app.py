@@ -1146,7 +1146,7 @@ with t2:
 
     df_display = build_statement(df_raw.copy())
 
-    # ===== الازرار فوق - نسخة مصححة نهائية =====
+    # ===== Top Buttons - Final Fixed Version =====
     top_btn1, top_btn2 = st.columns(2)
     with top_btn1:
         if st.button("🖨️ Print PDF", use_container_width=True, key=f"btn_pdf_top_UNIQUE_{view_agent}"):
@@ -1264,11 +1264,11 @@ with t2:
             df_pays_excel.to_excel(writer, index=False, sheet_name="Payments")
         st.download_button("📊 Export Excel", output.getvalue(), file_name=f"HOTRIGO_{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_excel_{view_agent}")
 
-    # ===== حجوزات احمد - من الشيت =====
-    st.markdown(f"### 📋 حجوزات {view_agent}")
+    # ===== Bookings from Sheet =====
+    st.markdown(f"### 📋 Bookings - {view_agent}")
     st.dataframe(df_display, use_container_width=True, hide_index=True)
 
-    # ===== دفعات احمد - كل دفعة بتاريخها من الشيت =====
+    # ===== Payments - Each payment with its date from Sheet =====
     conn=sqlite3.connect(DB)
     df_pays_show = pd.read_sql("SELECT pay_date as Date, amount as Amount, note as Note FROM agent_payments WHERE agent=? ORDER BY pay_date DESC", conn, params=(view_agent,))
     try:
@@ -1281,12 +1281,12 @@ with t2:
     conn.close()
 
     if not df_pays_show.empty:
-        st.markdown(f"### 💰 سجل دفعات {view_agent} - كل دفعة بتاريخها")
+        st.markdown(f"### 💰 Payment History - {view_agent} - Each payment with date")
         df_pays_show_disp = df_pays_show.copy()
         df_pays_show_disp['Amount'] = df_pays_show_disp['Amount'].apply(lambda x: f"${float(x):.2f}")
         st.dataframe(df_pays_show_disp, use_container_width=True, hide_index=True)
     else:
-        st.info(f"لا يوجد دفعات للوكيل {view_agent}")
+        st.info(f"No payments for agent {view_agent}")
 
     k1,k2,k3 = st.columns(3)
     k1.metric("Total Sales", f"${float(total_sales_show):.2f}")
@@ -1297,26 +1297,26 @@ with t2:
 
     col_pay1, col_pay2 = st.columns([1,2])
     with col_pay1:
-        st.markdown("#### اضافة دفعة جديدة")
+        st.markdown("#### Add New Payment")
         conn=sqlite3.connect(DB)
         agents_list=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]
         conn.close()
-        pay_agent = st.selectbox("اختر الوكيل", agents_list, key=f"pay_agent_{view_agent}", index=agents_list.index(view_agent) if view_agent in agents_list else 0)
-        pay_date = st.date_input("تاريخ الدفعة", datetime.now(), key=f"pay_date_{view_agent}")
-        pay_amount = st.text_input("المبلغ $", key=f"pay_amount_{view_agent}")
-        pay_note = st.text_input("ملاحظة", key=f"pay_note_{view_agent}", placeholder="تحويل بنكي - كاش...")
-        if st.button("اضافة دفعة", type="primary", use_container_width=True, key=f"btn_add_pay_{view_agent}"):
+        pay_agent = st.selectbox("Select Agent", agents_list, key=f"pay_agent_{view_agent}", index=agents_list.index(view_agent) if view_agent in agents_list else 0)
+        pay_date = st.date_input("Payment Date", datetime.now(), key=f"pay_date_{view_agent}")
+        pay_amount = st.text_input("Amount $", key=f"pay_amount_{view_agent}")
+        pay_note = st.text_input("Note", key=f"pay_note_{view_agent}", placeholder="Bank transfer - Cash...")
+        if st.button("Add Payment", type="primary", use_container_width=True, key=f"btn_add_pay_{view_agent}"):
             amt = to_f(pay_amount)
             if not pay_agent or amt<=0: 
-                st.error("اختر وكيل ومبلغ صحيح")
+                st.error("Please select agent and valid amount")
             else:
                 conn=sqlite3.connect(DB)
                 conn.execute("INSERT INTO agent_payments (agent, pay_date, amount, note) VALUES (?,?,?,?)", (pay_agent, str(pay_date), amt, pay_note))
                 conn.commit(); conn.close()
-                st.success(f"تم اضافة ${amt} للوكيل {pay_agent}")
+                st.success(f"Added ${amt} for agent {pay_agent}")
                 st.rerun()
     with col_pay2:
-        st.markdown("#### ملخص الأرصدة - كل الوكلاء")
+        st.markdown("#### Balance Summary - All Agents")
         conn=sqlite3.connect(DB)
         summary2 = pd.read_sql("SELECT b.company as Agent, SUM(b.sell) as Total_Sales, (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Total_Paid, SUM(b.sell) - (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Balance FROM bookings b GROUP BY b.company", conn)
         conn.close()
