@@ -678,7 +678,7 @@ with t1:
         sd=st.date_input("Sale Date", datetime.now(), key="sd")
         emp=st.text_input("Sales Employee *", key="emp")
         comp=st.text_input("Agent *", key="comp", placeholder="")
-        pax_count=st.text_input("Number of Persons", value="1", key="pax_count", placeholder="e.g. 2")
+        pax_count=st.text_input("Number of Persons", value="1", key="pax_count", placeholder="")
         try:
             pax_num = int(pax_count) if pax_count.strip()!="" else 1
         except:
