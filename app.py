@@ -786,6 +786,13 @@ with t1:
             with c_air_dep: dep_airport=st.text_input("Departure Airport", key="dep_airport", placeholder="IST")
             with c_air_ret: ret_airport=st.text_input("Return Airport", key="ret_airport", placeholder="BEY")
             transport_co=st.text_input("Transport Company (empty=no transfer)", key="transport_co", placeholder="")
+
+        if st.button("➕ Add / أضف", use_container_width=True, key="add_btn"):
+            airline_val=st.session_state.get("airline_pick","")
+            airline_full=airline_map.get(airline_val, airline_val)
+            transport_full=transport_map.get(transport_co.strip(), transport_co.strip())
+            if not comp_full or not pas.strip() or not hotel_full:
+                st.error("Please fill Company, Passengers, Hotel")
             else:
                 ht_tot=to_f(pn)*to_f(nights)*to_f(room_count)
                 cost=ht_tot+to_f(fl)+to_f(tr)
