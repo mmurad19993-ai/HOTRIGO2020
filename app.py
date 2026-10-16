@@ -965,11 +965,12 @@ with r:
         b_filter, b_btns = st.columns([1.0, 4.0])
         with b_filter: search_mode = st.selectbox("نوع البحث", ["الكل", "مسافر فقط", "وكيل فقط", "رقم حجز"], key="search_mode")
         with b_btns:
-            b1, b2, b3, b4, scol=st.columns([0.5, 0.6, 0.6, 1.0, 1.5])
+            b1, b2, b3, b4, b5, scol=st.columns([0.5, 0.6, 0.6, 1.0, 0.6, 1.5])
             with b1: edit_btn=st.button("Edit", use_container_width=True, key="edit_small")
             with b2: inv_btn=st.button("Invoice", use_container_width=True, key="inv_btn")
             with b3: voucher_btn=st.button("Voucher", use_container_width=True, key="voucher_btn")
             with b4: statement_btn=st.button("Agent Statement", use_container_width=True, key="statement_btn", type="primary")
+            with b5: view_btn=st.button("👁️ عرض", use_container_width=True, key="view_btn")
             with scol: search_val=st.text_input("Search", placeholder="Search...", label_visibility="collapsed", key="search")
         conn=sqlite3.connect(DB)
         base="SELECT * FROM bookings WHERE 1=1"; params=[]
@@ -1020,12 +1021,40 @@ with r:
             else:
                 conn=sqlite3.connect(DB); row=conn.execute("SELECT * FROM bookings WHERE id=?", (int(ids[0]),)).fetchone(); conn.close()
                 if row: voucher_dialog(row)
-        if statement_btn:
-            ag = get_selected_agent()
-            if not ag: st.error("حدد سطر واحد للوكيل")
-            else: agent_statement_dialog(ag)
-with t2:
-    st.markdown("## 💰 كشف حساب الوكلاء")
+    if statement_btn:
+        ag = get_selected_agent()
+        if not ag: st.error("حدد سطر واحد للوكيل")
+        else: agent_statement_dialog(ag)
+    if view_btn:
+        ids=get_selected_ids()
+        if len(ids)!=1: st.error("حدد حجز واحد من الجدول أولاً")
+        else:
+            conn=sqlite3.connect(DB)
+            conn.row_factory=sqlite3.Row
+            row=conn.execute("SELECT * FROM bookings WHERE id=?", (int(ids[0]),)).fetchone()
+            conn.close()
+            if row:
+                @st.dialog("عرض الحجز", width="large")
+                def view_dialog():
+                    d=dict(row)
+                    st.markdown(f"<h1 style='text-align:center; font-weight:900; font-size:32px;'>{d.get('company','')}</h1>", unsafe_allow_html=True)
+                    st.divider()
+                    c1,c2=st.columns(2)
+                    with c1:
+                        st.markdown("**👥 المسافرين:**")
+                        st.info(d.get('passengers',''))
+                        st.markdown(f"**🏨 الفندق:** {d.get('hotel','')}")
+                        st.markdown(f"**📝 الملاحظة:** {d.get('notes','')}")
+                    with c2:
+                        st.markdown(f"**📅 الدخول:** {d.get('entry_date','')}")
+                        st.markdown(f"**📅 الخروج:** {d.get('exit_date','')}")
+                        st.divider()
+                        st.markdown(f"**✈️ ذهاب:** {d.get('flight_dep_time','')} مطار {d.get('dep_airport','')}")
+                        st.markdown(f"**✈️ عودة:** {d.get('flight_ret_time','')} مطار {d.get('ret_airport','')}")
+                        st.markdown(f"**شركة طيران:** {d.get('airline','')}")
+                view_dialog()
+    with t2:
+        st.markdown("## 💰 كشف حساب الوكلاء")
     col_pay1, col_pay2 = st.columns([1,2])
     with col_pay1:
         st.markdown("#### اضافة دفعة جديدة")
