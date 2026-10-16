@@ -1147,7 +1147,7 @@ with t2:
     df_display = build_statement(df_raw.copy())
 
     with c2:
-        if st.button("🖨️ Print PDF", use_container_width=True, key="btn_pdf"):
+        if st.button("🖨️ Print PDF", use_container_width=True, key=f"btn_pdf_{view_agent}"):
             try:
                 from fpdf import FPDF
                 from io import BytesIO
@@ -1159,7 +1159,7 @@ with t2:
                 pdf.set_font("Arial", "B", 5.5)
                 col_w = 25
                 for col_name in df_display.columns:
-                    pdf.cell(col_w, 7, col_name, border=1, align='C')
+                    pdf.cell(col_w, 7, str(col_name)[:20], border=1, align='C')
                 pdf.ln()
                 pdf.set_font("Arial", "", 5.5)
                 for _, r in df_display.iterrows():
@@ -1168,26 +1168,9 @@ with t2:
                     pdf.ln()
                 pdf_buffer = BytesIO()
                 pdf.output(pdf_buffer)
-                st.download_button("📥 Download PDF", pdf_buffer.getvalue(), file_name=f"{view_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key="dl_pdf")
+                st.download_button("📥 Download PDF", pdf_buffer.getvalue(), file_name=f"{view_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key=f"dl_pdf_{view_agent}")
             except Exception as e:
                 st.error(f"PDF Error: {e}")
-
-    with c3:
-        from io import BytesIO
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_display.to_excel(writer, index=False, sheet_name="Statement")
-        st.download_button("📊 Export Excel", output.getvalue(), file_name=f"{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="dl_excel")
-
-    st.dataframe(df_display, use_container_width=True, hide_index=True)
-    st.divider()
-
-        with col_pay2:
-        st.markdown("#### Balances Summary")
-        conn=sqlite3.connect(DB)
-        summary = pd.read_sql("SELECT b.company as Agent, SUM(b.sell) as Total_Sales, (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Total_Paid, SUM(b.sell) - (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Balance FROM bookings b GROUP BY b.company", conn)
-        conn.close()
-        st.dataframe(summary, use_container_width=True, hide_index=True)
 
     with c3:
         from io import BytesIO
@@ -1200,7 +1183,7 @@ with t2:
                 for cell in row:
                     cell.alignment = Alignment(wrap_text=True, vertical='top')
             ws.column_dimensions['C'].width = 35
-        st.download_button("📥 تصدير Excel", output.getvalue(), file_name=f"{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_excel_final_{view_agent}")
+        st.download_button("📊 Export Excel", output.getvalue(), file_name=f"{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_excel_{view_agent}")
 
     st.dataframe(df_display, use_container_width=True, hide_index=True)
     st.divider()
