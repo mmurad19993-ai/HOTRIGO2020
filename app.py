@@ -1090,8 +1090,8 @@ if view_btn:
 
             view_dialog()
 with t2:
-    st.markdown("## 💰 كشف حساب الوكلاء")
-    st.markdown("#### 🔍 عرض كشف وكيل")
+    st.markdown("## 💰 Agents Statement")
+    st.markdown("#### 🔍 View Agent Statement")
     c1, c2, c3 = st.columns([3, 1, 1])
 
     conn=sqlite3.connect(DB)
@@ -1099,7 +1099,7 @@ with t2:
     conn.close()
 
     with c1:
-        view_agent = st.selectbox("اختر الوكيل", all_companies, key="view_agent", placeholder="اختر الوكيل...")
+        view_agent = st.selectbox("Select Agent", all_companies, key="view_agent", placeholder="Select Agent...")
 
     conn=sqlite3.connect(DB)
     df_raw = pd.read_sql("SELECT * FROM bookings WHERE company=? ORDER BY entry_date DESC", conn, params=(view_agent,))
@@ -1107,30 +1107,42 @@ with t2:
 
     def build_statement(df):
         if df.empty:
-            return pd.DataFrame(columns=["رقم الحجز","اسم الوكيل","اسماء المسافرين","عدد المسافرين","الفندق","عدد الغرف","تاريخ الدخول","تاريخ الخروج","سعر البيع","الملاحظة"])
+            return pd.DataFrame(columns=["Booking ID","Agent Name","Passenger Names","Pax Count","Hotel","Rooms","Check-in","Nights","Check-out","Sell Price","Note"])
+
         if 'passenger_count' not in df.columns and 'pax_count' not in df.columns:
             df['pax_count'] = df['passengers'].apply(lambda x: len([l for l in str(x).split('\n') if l.strip()]) if x else 0)
+
         pax_col = 'pax_count' if 'pax_count' in df.columns else 'passenger_count'
         room_col = 'rooms' if 'rooms' in df.columns else ('room_count' if 'room_count' in df.columns else None)
         note_col = 'notes' if 'notes' in df.columns else 'note'
         sell_col = 'sell' if 'sell' in df.columns else 'sell_price'
+
+        try:
+            df['nights_calc'] = (pd.to_datetime(df['exit_date'], errors='coerce') - pd.to_datetime(df['entry_date'], errors='coerce')).dt.days
+            df['nights_calc'] = df['nights_calc'].fillna(1).astype(int)
+        except:
+            df['nights_calc'] = 1
+
+        nights_final = df['nights'] if 'nights' in df.columns else df['nights_calc']
+
         out = pd.DataFrame()
-        out["رقم الحجز"] = df['id'] if 'id' in df.columns else df.index
-        out["اسم الوكيل"] = df['company']
-        out["اسماء المسافرين"] = df['passengers']
-        out["عدد المسافرين"] = df[pax_col] if pax_col in df.columns else 1
-        out["الفندق"] = df['hotel'] if 'hotel' in df.columns else ""
-        out["عدد الغرف"] = df[room_col] if room_col and room_col in df.columns else 1
-        out["تاريخ الدخول"] = df['entry_date'] if 'entry_date' in df.columns else ""
-        out["تاريخ الخروج"] = df['exit_date'] if 'exit_date' in df.columns else ""
-        out["سعر البيع"] = df[sell_col] if sell_col in df.columns else 0
-        out["الملاحظة"] = df[note_col] if note_col in df.columns else ""
+        out["Booking ID"] = df['id'] if 'id' in df.columns else range(1, len(df)+1)
+        out["Agent Name"] = df['company']
+        out["Passenger Names"] = df['passengers']
+        out["Pax Count"] = df[pax_col] if pax_col in df.columns else 1
+        out["Hotel"] = df['hotel'] if 'hotel' in df.columns else ""
+        out["Rooms"] = df[room_col] if room_col and room_col in df.columns else 1
+        out["Check-in"] = df['entry_date'] if 'entry_date' in df.columns else ""
+        out["Nights"] = nights_final
+        out["Check-out"] = df['exit_date'] if 'exit_date' in df.columns else ""
+        out["Sell Price"] = df[sell_col] if sell_col in df.columns else 0
+        out["Note"] = df[note_col] if note_col in df.columns else ""
         return out
 
     df_display = build_statement(df_raw.copy())
 
     with c2:
-        if st.button("🖨️ طباعة PDF", use_container_width=True, key="btn_pdf"):
+        if st.button("🖨️ Print PDF", use_container_width=True, key="btn_pdf"):
             try:
                 from fpdf import FPDF
                 from io import BytesIO
@@ -1139,21 +1151,52 @@ with t2:
                 pdf.set_font("Arial", "B", 11)
                 pdf.cell(0, 10, f"Agent Statement - {view_agent}", ln=True, align='C')
                 pdf.ln(2)
-                pdf.set_font("Arial", "B", 6)
-                col_w = 27.5
+                pdf.set_font("Arial", "B", 5.5)
+                col_w = 25
                 for col_name in df_display.columns:
-                    pdf.cell(col_w, 7, col_name.encode('latin-1','ignore').decode('latin-1'), border=1, align='C')
+                    pdf.cell(col_w, 7, col_name, border=1, align='C')
                 pdf.ln()
-                pdf.set_font("Arial", "", 6)
+                pdf.set_font("Arial", "", 5.5)
                 for _, r in df_display.iterrows():
                     for val in r:
-                        pdf.cell(col_w, 6, str(val)[:30].encode('latin-1','ignore').decode('latin-1'), border=1)
+                        pdf.cell(col_w, 6, str(val)[:25], border=1)
                     pdf.ln()
                 pdf_buffer = BytesIO()
                 pdf.output(pdf_buffer)
-                st.download_button("📥 تحميل PDF", pdf_buffer.getvalue(), file_name=f"{view_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key="dl_pdf")
+                st.download_button("📥 Download PDF", pdf_buffer.getvalue(), file_name=f"{view_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key="dl_pdf")
             except Exception as e:
-                st.error(f"خطأ PDF: {e}")
+                st.error(f"PDF Error: {e}")
+
+    with c3:
+        from io import BytesIO
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_display.to_excel(writer, index=False, sheet_name="Statement")
+        st.download_button("📊 Export Excel", output.getvalue(), file_name=f"{view_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key="dl_excel")
+
+    st.dataframe(df_display, use_container_width=True, hide_index=True)
+    st.divider()
+
+    col_pay1, col_pay2 = st.columns([1,2])
+    with col_pay1:
+        st.markdown("#### Add New Payment")
+        conn=sqlite3.connect(DB); agents_list=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]; conn.close()
+        pay_agent = st.selectbox("Select Agent", agents_list, key="pay_agent")
+        pay_date = st.date_input("Payment Date", datetime.now(), key="pay_date")
+        pay_amount = st.text_input("Amount $", key="pay_amount")
+        pay_note = st.text_input("Note", key="pay_note", placeholder="Bank transfer - Cash...")
+        if st.button("Add Payment", type="primary", use_container_width=True):
+            amt = to_f(pay_amount)
+            if not pay_agent or amt<=0: st.error("Select agent and valid amount")
+            else:
+                conn=sqlite3.connect(DB); conn.execute("INSERT INTO agent_payments (agent, pay_date, amount, note) VALUES (?,?,?,?)", (pay_agent, str(pay_date), amt, pay_note)); conn.commit(); conn.close()
+                st.success(f"Added ${amt} to {pay_agent}"); st.rerun()
+    with col_pay2:
+        st.markdown("#### Balances Summary")
+        conn=sqlite3.connect(DB)
+        summary = pd.read_sql("SELECT b.company as Agent, SUM(b.sell) as Total_Sales, (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Total_Paid, SUM(b.sell) - (SELECT COALESCE(SUM(p.amount),0) FROM agent_payments p WHERE p.agent=b.company) as Balance FROM bookings b GROUP BY b.company", conn)
+        conn.close()
+        st.dataframe(summary, use_container_width=True, hide_index=True)
 
     with c3:
         from io import BytesIO
