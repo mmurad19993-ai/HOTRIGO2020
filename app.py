@@ -731,7 +731,6 @@ with t1:
         xd=ed+timedelta(days=nights_val)
         st.caption(f"Check-out: {xd}")
 
-        # --- هون صاروا كبار - شلت c_small ---
         c_price, c_flight = st.columns(2)
         with c_price: pn_s=st.text_input("Price per Night $", key="pn")
         with c_flight: fl_s=st.text_input("Flight $", key="fl")
@@ -764,19 +763,6 @@ with t1:
             with c_air_dep: dep_airport=st.text_input("Departure Airport", key="dep_airport", placeholder="IST")
             with c_air_ret: ret_airport=st.text_input("Return Airport", key="ret_airport", placeholder="BEY")
             transport_co=st.text_input("Transport Company (empty=no transfer)", key="transport_co", placeholder="")
-
-        pn=to_f(pn_s); fl=to_f(fl_s); tr=to_f(tr_s); sell=to_f(sell_s)
-
-        try: room_count_val=int(room_count) if room_count.strip()!="" else 0
-        except: room_count_val=0
-        rc_for_calc = room_count_val if room_count_val > 0 else 1
-        cost_total = (pn * nights_val * rc_for_calc) + fl + tr
-        if cost_total > 0:
-            st.caption(f"💰 الكوست صار علينا: ${cost_total:,.2f}")
-
-        notes=st.text_input("Note", key="notes")
-        airline=st.text_input("Airline (empty=no flight)", key="airline", placeholder="")
-        vno=st.text_input("Voucher No", key="vno")
 
         if st.button("SAVE SALE", type="primary", use_container_width=True, key="save_btn"):
             airline_val = airline.strip()
