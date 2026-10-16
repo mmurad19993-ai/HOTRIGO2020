@@ -747,9 +747,9 @@ with t1:
             st.caption(f"💰 الكوست صار علينا: ${cost_total:,.2f}")
 
         with c_small:
-        notes=st.text_input("Note", key="notes")
-        airline=st.text_input("Airline (empty=no flight)", key="airline", placeholder="")
-        vno=st.text_input("Voucher No", key="vno")
+            notes=st.text_input("Note", key="notes")
+            airline=st.text_input("Airline (empty=no flight)", key="airline", placeholder="")
+            vno=st.text_input("Voucher No", key="vno")
 
         with st.expander("➕ Show More / باقي المعلومات - المزيد", expanded=False):
         with st.expander("➕ Show More / باقي المعلومات - المزيد", expanded=False):
