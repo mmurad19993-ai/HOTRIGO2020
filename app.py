@@ -26,6 +26,7 @@ BASE_DIR = os.path.dirname(__file__)
 DRIVE_FOLDER = "Hotrigo Backup"
 SHEET_NAME = "HOTRIGO_DATABASE"
 SHEET_HEADER = ["ID","Agent","Passengers","Passengers Count","Hotel","Rooms","Room Type","Price Night","Hotel Total","Check-in","Nights","Check-out","Flight $","Transport $","Sell Price","Cost","Profit","Sale Date","Voucher No","Notes","Airline","Employee","Dep Time","Ret Time","Flight No Dep","Flight No Ret","Transport Co"]
+DB = os.path.join(BASE_DIR, "hotrigo.db")
 
 def get_drive_service():
     try:
@@ -33,6 +34,7 @@ def get_drive_service():
             return None, None
         creds_dict = dict(st.secrets["gdrive"])
         folder_id = creds_dict.pop("FOLDER_ID", None)
+        creds_dict.pop("folder_id", None)
         pk = creds_dict.get("private_key", "")
         if "\\n" in pk:
             creds_dict["private_key"] = pk.replace("\\n", "\n")
@@ -41,7 +43,9 @@ def get_drive_service():
         service = build('drive', 'v3', credentials=creds)
         return service, folder_id
     except Exception as e:
+        print(f"Drive error: {e}")
         return None, None
+
 def get_folder_id(service, name):
     try:
         q=f"mimeType='application/vnd.google-apps.folder' and name='{name}' and trashed=false"
@@ -50,7 +54,44 @@ def get_folder_id(service, name):
         if files: return files[0]['id']
         folder=service.files().create(body={'name':name,'mimeType':'application/vnd.google-apps.folder'},fields='id').execute()
         return folder.get('id')
-    except: return None
+    except:
+        return None
+
+def get_sheet_client():
+    try:
+        if "gdrive" not in st.secrets:
+            return None
+        creds_dict = dict(st.secrets["gdrive"])
+        creds_dict.pop("FOLDER_ID", None)
+        creds_dict.pop("folder_id", None)
+        pk = creds_dict.get("private_key", "")
+        if "\\n" in pk:
+            creds_dict["private_key"] = pk.replace("\\n", "\n")
+        creds = ServiceAccountCredentials.from_service_account_info(
+            creds_dict, scopes=["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"])
+        return gspread.authorize(creds)
+    except Exception as e:
+        print(f"Sheet client error: {e}")
+        return None
+
+def get_gspread_sheet(worksheet_name="reservations"):
+    try:
+        client = get_sheet_client()
+        if not client:
+            return None
+        sh = client.open(SHEET_NAME)
+        try:
+            ws = sh.worksheet(worksheet_name)
+        except:
+            ws = sh.sheet1 if worksheet_name == "reservations" else None
+        return ws
+    except Exception as e:
+        print(f"Sheet error {worksheet_name}: {e}")
+        return None
+
+def get_spreadsheet():
+    c = get_sheet_client()
+    return c.open(SHEET_NAME) if c else None
 
 def upload_drive(local_path):
     def get_or_create_subfolder(service, parent_id, sub_name):
