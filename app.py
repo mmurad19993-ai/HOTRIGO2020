@@ -124,27 +124,61 @@ def load_data():
         print(f"Load error: {e}")
         return []
 
-def get_gspread_sheet():
+def get_sheet_client():
+    try:
+        if "gdrive" not in st.secrets:
+            print("gdrive missing in secrets")
+            return None
+        creds_dict = dict(st.secrets["gdrive"])
+        # شيل الـ folder_id مشان ما يخرب
+        creds_dict.pop("FOLDER_ID", None)
+        creds_dict.pop("folder_id", None)
+        creds_dict.pop("FOLDER_ID ", None)
+        
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(
+            creds_dict,
+            ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
+        )
+        client = gspread.authorize(creds)
+        return client
+    except Exception as e:
+        print(f"Client error: {e}")
+        return None
+
+def get_gspread_sheet(worksheet_name="reservations"):
     try:
         client = get_sheet_client()
         if not client:
             return None
         spreadsheet = client.open(SHEET_NAME)
         try:
-            sheet = spreadsheet.worksheet("reservations")
+            sheet = spreadsheet.worksheet(worksheet_name)
         except:
-            sheet = spreadsheet.sheet1
-        # اذا الشيت فاضي تماما حط الهيدر بس
-        try:
-            vals = sheet.get_all_values()
-            if len(vals) == 0:
-                sheet.append_row(SHEET_HEADER)
-        except:
-            pass
+            try:
+                sheet = spreadsheet.worksheet(worksheet_name.lower())
+            except:
+                sheet = spreadsheet.sheet1 if worksheet_name == "reservations" else None
+                if sheet is None:
+                    print(f"Worksheet {worksheet_name} not found")
+                    return None
+        # اذا الشيت فاضي تماما حط الهيدر بس للـ reservations
+        if worksheet_name == "reservations":
+            try:
+                vals = sheet.get_all_values()
+                if len(vals) == 0:
+                    sheet.append_row(SHEET_HEADER)
+            except:
+                pass
         return sheet
     except Exception as e:
-        print(f"Sheet open failed: {e}")
+        print(f"Sheet open failed {worksheet_name}: {e}")
         return None
+
+def get_spreadsheet():
+    client = get_sheet_client()
+    if not client:
+        return None
+    return client.open(SHEET_NAME)
 SHEET_HEADER = ["ID","Agent","Passengers","Passengers Count","Hotel","Rooms","Room Type","Price Night","Hotel Total","Check-in","Nights","Check-out","Flight $","Transport $","Sell Price","Cost","Profit","Sale Date","Voucher No","Notes","Airline","Employee","Dep Time","Ret Time","Flight No Dep","Flight No Ret","Transport Co"]
 
 def booking_to_sheet_row(b):
