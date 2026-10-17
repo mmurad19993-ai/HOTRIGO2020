@@ -655,6 +655,16 @@ def generate_agent_statement_pdf(agent_name, bookings_df, payments_df):
 
 st.set_page_config(page_title="hotrigo", page_icon="✈️", layout="wide")
 
+# ===== تحديث لحظي من الشيت - كل 10 ثواني =====
+import time
+if "last_refresh" not in st.session_state:
+    st.session_state.last_refresh = time.time()
+
+if time.time() - st.session_state.last_refresh > 10:
+    st.session_state.last_refresh = time.time()
+    st.cache_data.clear()
+    st.rerun()
+
 # --- DB اللوكال ملغي - تحميل القوائم من الشيت مباشر ---
 agents_for_js = []
 hotels_for_js = []
