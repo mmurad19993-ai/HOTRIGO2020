@@ -74,6 +74,43 @@ def get_sheet_client():
         print(f"Sheet client error: {e}")
         return None
 
+def add_payment(tab_name, name_value, amount_val, note_val, note1_val):
+    try:
+        client = get_sheet_client()
+        if not client:
+            st.error("No sheet client - check secrets")
+            return False
+        sh = client.open(SHEET_NAME)
+        ws = sh.worksheet(tab_name)
+        ws.append_row([
+            datetime.now().strftime("%Y-%m-%d"),
+            str(name_value),
+            float(amount_val),
+            str(note_val),
+            str(note1_val),
+            st.session_state.get("username","admin"),
+            datetime.now().strftime("%H%M%S")
+        ])
+        st.success(f"تم الحفظ في {tab_name} ✓")
+        return True
+    except Exception as e:
+        st.error(f"Sheet Error {tab_name}: {e}")
+        return False
+
+def get_gspread_sheet(worksheet_name="reservations"):
+    try:
+        client = get_sheet_client()
+        if not client:
+            return None
+        sh = client.open(SHEET_NAME)
+        try:
+            ws = sh.worksheet(worksheet_name)
+        except:
+            ws = sh.sheet1 if worksheet_name == "reservations" else None
+        return ws
+    except Exception as e:
+        print(f"Sheet error {worksheet_name}: {e}")
+        return None
 def get_gspread_sheet(worksheet_name="reservations"):
     try:
         client = get_sheet_client()
