@@ -69,23 +69,50 @@ def get_folder_id(service, name):
     except:
         return None
 
+# ===== FIXED VERSION - Python 3.11 Compatible =====
 def get_gspread_sheet(worksheet_name=None):
     try:
+        # نظف الـ ID من اي مسافات او علامات تنصيص
         sid = st.secrets.get("SHEET_ID", SHEET_ID_FALLBACK)
-        sid = str(sid).strip().strip('"').strip("'")
+        sid = str(sid).strip().strip('"').strip("'").strip()
+        if "/" in sid:  # اذا حاطط رابط كامل بالغلط
+            sid = sid.split("/d/")[1].split("/")[0] if "/d/" in sid else sid
+        
         creds_info = dict(st.secrets["gcp_service_account"])
+        # اصلاح مشكلة \n في المفتاح
         if "\\n" in creds_info.get("private_key",""):
             creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
-        scopes = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
+        
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
         creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
         client = gspread.authorize(creds)
-        ss = client.open_by_key(sid)
+        
+        ss = None
+        try:
+            ss = client.open_by_key(sid)
+        except Exception as e:
+            # اذا فشل الـ ID - دور على الشيت بالاسم HOTRIGO
+            try:
+                files = client.list_spreadsheet_files()
+                for f in files:
+                    if "HOTRIGO" in f['name'].upper() or "DATABASE" in f['name'].upper():
+                        ss = client.open_by_key(f['id'])
+                        break
+                if not ss:
+                    raise e
+            except:
+                raise e
+
         if worksheet_name:
             try:
                 return ss.worksheet(worksheet_name)
-            except:
+            except gspread.exceptions.WorksheetNotFound:
                 return ss.add_worksheet(title=worksheet_name, rows=2000, cols=30)
         return ss.sheet1
+        
     except Exception as e:
         st.error(f"❌ Sheet Error: {e}")
         import traceback
@@ -102,7 +129,8 @@ def get_spreadsheet():
 def add_payment(tab_name, name_value, amount_val, note_val, note1_val):
     try:
         ws = get_gspread_sheet(tab_name)
-        if not ws: return False
+        if not ws: 
+            return False
         ws.append_row([
             datetime.now().strftime("%Y-%m-%d"),
             str(name_value),
@@ -110,8 +138,8 @@ def add_payment(tab_name, name_value, amount_val, note_val, note1_val):
             str(note_val),
             str(note1_val),
             st.session_state.get("username","admin"),
-            datetime.now().strftime("%H%M%S")
-        ])
+            datetime.now().strftime("%H:%M:%S")
+        ], value_input_option='USER_ENTERED')
         return True
     except Exception as e:
         st.error(f"Sheet Error {tab_name}: {e}")
@@ -126,7 +154,9 @@ def upload_drive(local_path):
             if fls: return fls[0]['id']
             folder=service.files().create(body={'name':sub_name,'mimeType':'application/vnd.google-apps.folder','parents':[parent_id]}, fields='id').execute()
             return folder.get('id')
-        except: return parent_id
+        except: 
+            return parent_id
+            
     try:
         service, folder_id_secret = get_drive_service()
         if service and os.path.exists(local_path):
@@ -137,11 +167,13 @@ def upload_drive(local_path):
                 if up.startswith("BOOK-"): folder_id = get_or_create_subfolder(service, folder_id, "Invoices")
                 elif up.startswith("VOUCHER_"): folder_id = get_or_create_subfolder(service, folder_id, "Vouchers")
                 elif up.startswith("STATEMENT_"): folder_id = get_or_create_subfolder(service, folder_id, "Statements")
+                
                 q=f"name='{fname}' and '{folder_id}' in parents and trashed=false"
                 ex=service.files().list(q=q, fields="files(id)").execute()
                 for f in ex.get('files',[]):
                     try: service.files().delete(fileId=f['id']).execute()
                     except: pass
+                    
                 media=MediaFileUpload(local_path, resumable=True)
                 service.files().create(body={'name':fname,'parents':[folder_id]}, media_body=media).execute()
                 return True
@@ -153,7 +185,8 @@ def load_data():
     try:
         sheet = get_gspread_sheet()
         return sheet.get_all_records() if sheet else []
-    except: return []
+    except: 
+        return []
 
 def booking_to_sheet_row(b):
     try:
@@ -161,24 +194,40 @@ def booking_to_sheet_row(b):
         def gv(k, default=""):
             v = d.get(k, default) if isinstance(d, dict) else default
             return "" if v is None else v
+            
         nights = 0
         try:
             en = datetime.strptime(str(gv("entry_date"))[:10], "%Y-%m-%d")
             ex = datetime.strptime(str(gv("exit_date"))[:10], "%Y-%m-%d")
             nights = max(0, (ex - en).days)
         except: pass
-        try: room_count = 0 if str(gv("room_count")).strip()=="" else int(float(str(gv("room_count"))))
-        except: room_count = 0
+        
+        try: 
+            room_count = 0 if str(gv("room_count")).strip()=="" else int(float(str(gv("room_count"))))
+        except: 
+            room_count = 0
+            
         pax_names = str(gv("passengers")).strip()
         pax_count = len([x for x in pax_names.replace("\n",",").split(",") if x.strip()!=""]) if pax_names else 0
+        
         sell = to_f(gv("sell"))
-        pn = to_f(gv("price_night") or gv("price_per_night") or gv("price_night"))
-        fl = to_f(gv("flight") or gv("flight_cost"))
-        tr = to_f(gv("transport") or gv("transport_cost"))
+        pn = to_f(gv("price_night") or gv("price_per_night") or 0)
+        fl = to_f(gv("flight") or gv("flight_cost") or 0)
+        tr = to_f(gv("transport") or gv("transport_cost") or 0)
         hotel_total = pn * (room_count if room_count>0 else 1) * (nights if nights>0 else 1)
         cost = hotel_total + fl + tr
         profit = sell - cost
-        row = [gv("id"),gv("company"),gv("passengers"),pax_count,gv("hotel"),room_count,gv("room_type"),pn,hotel_total,gv("entry_date"),nights,gv("exit_date"),fl,tr,sell,cost,profit,gv("sale_date"),gv("voucher") or gv("voucher_no"),gv("notes"),gv("airline"),gv("emp"),gv("dep"),gv("ret"),gv("fno_dep") or gv("flight_no_dep"),gv("fno_ret") or gv("flight_no_ret"),gv("transport_company"),]
+        
+        row = [
+            gv("id"), gv("company"), gv("passengers"), pax_count, gv("hotel"), 
+            room_count, gv("room_type"), pn, hotel_total, gv("entry_date"), 
+            nights, gv("exit_date"), fl, tr, sell, cost, profit, 
+            gv("sale_date"), gv("voucher") or gv("voucher_no"), gv("notes"), 
+            gv("airline"), gv("emp"), gv("dep"), gv("ret"), 
+            gv("fno_dep") or gv("flight_no_dep"), 
+            gv("fno_ret") or gv("flight_no_ret"), 
+            gv("transport_company")
+        ]
         return [str(x) for x in row]
     except Exception as e:
         print(f"booking_to_sheet_row error {e}")
@@ -187,8 +236,9 @@ def booking_to_sheet_row(b):
 def sync_booking_to_sheet(booking_data):
     try:
         sheet = get_gspread_sheet()
-        if not sheet: return False
-        # يقبل ID او dict
+        if not sheet: 
+            return False
+            
         if isinstance(booking_data, int):
             conn=sqlite3.connect(DB, check_same_thread=False)
             conn.row_factory=sqlite3.Row
@@ -202,12 +252,15 @@ def sync_booking_to_sheet(booking_data):
             b=booking_data
         else:
             return False
+            
         row = booking_to_sheet_row(b)
-        if not row: return False
+        if not row: 
+            return False
+            
         booking_id = str(b.get("id",""))
         try:
             cell = sheet.find(booking_id)
-            sheet.update(f"A{cell.row}:AA{cell.row}", [row])
+            sheet.update(f"A{cell.row}:AA{cell.row}", [row], value_input_option='USER_ENTERED')
         except:
             sheet.append_row(row, value_input_option='USER_ENTERED')
         return True
@@ -243,10 +296,11 @@ def init():
             try:
                 first_row = sheet.row_values(1)
                 if not first_row or len(first_row) == 0:
-                    sheet.update('A1', [SHEET_HEADER])
+                    sheet.update('A1', [SHEET_HEADER], value_input_option='USER_ENTERED')
             except: pass
     except: pass
     return True
+
 init()
 @st.dialog("Edit Booking")
 def edit_dialog(row):
