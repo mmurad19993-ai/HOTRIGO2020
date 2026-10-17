@@ -5,22 +5,20 @@ import pandas as pd
 import streamlit.components.v1 as components
 import os, io, re, json, base64
 from pathlib import Path
-
-# ===== GOOGLE DRIVE + SHEETS =====
-import os, json, base64, re, io
 import gspread
-import pandas as pd
-import streamlit as st
-import streamlit.components.v1 as components
-from datetime import datetime, timedelta
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-import sqlite3
 
 SHEET_ID_FALLBACK = "1WyJlLeChys_qh_qCxjFUZBq-FlhgHbhBaizMcg21Zqc"
 SHEETS_AVAILABLE = True
 DRIVE_AVAILABLE = True
+BASE_DIR = os.path.dirname(__file__)
+DRIVE_FOLDER = "Hotrigo Backup"
+SHEET_NAME = "HOTRIGO_DATABASE"
+SHEET_ID = SHEET_ID_FALLBACK
+SHEET_HEADER = ["ID","Agent","Passengers","Passengers Count","Hotel","Rooms","Room Type","Price Night","Hotel Total","Check-in","Nights","Check-out","Flight $","Transport $","Sell Price","Cost","Profit","Sale Date","Voucher No","Notes","Airline","Employee","Dep Time","Ret Time","Flight No Dep","Flight No Ret","Transport Co"]
+DB = os.path.join(BASE_DIR, "hotrigo.db")
 
 BASE_DIR = os.path.dirname(__file__)
 DRIVE_FOLDER = "Hotrigo Backup"
