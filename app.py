@@ -978,86 +978,143 @@ def edit_dialog(row):
             st.error(f"Error updating sheet: {e}")
 @st.dialog("Invoice - معاينة الفاتورة", width="large")
 def invoice_dialog(row):
-    conn=sqlite3.connect(DB); full=conn.execute("SELECT * FROM bookings WHERE id=?", (int(row[0]),)).fetchone(); conn.close()
-    if not full: return
-    booking_num = full[15] if full[15] and str(full[15]).strip()!="" else f"BOOK-{full[0]}"
-    rc = full[25] if len(full)>25 and full[25] else 1
-    data={"company":full[4],"passengers":full[5],"hotel":full[6],"entry_date":full[2],"exit_date":full[3],"sell":full[12],"voucher":booking_num,"room_type":full[21] if len(full)>21 and full[21] else "","room_count":rc,"id":full[0]}
-    filename=f"{booking_num}_{sanitize_filename(data['passengers'])}.pdf"
-    full_path=Path.home() / "Desktop" / "invoice" / filename
-    pdf_bytes=generate_invoice_pdf(data, save_path=str(full_path))
-    logo_b64 = get_logo_b64()
-    logo_html = f"<img src='data:image/png;base64,{logo_b64}' style='width:110px;height:110px;object-fit:contain;background:white;border-radius:4px;padding:4px;margin-right:20px;'>" if logo_b64 else ""
-    passengers_html = "".join([f"<div style='padding:4px 0'>- {p.strip()}</div>" for p in str(data['passengers']).split('\n') if p.strip()])
-    html_preview = f"""<div style="background:white; border:1px solid #ddd; border-radius:12px; padding:20px; font-family:Arial; color:#222;"><div style="background:#0F2D5C; color:white; padding:12px 20px; border-radius:8px; margin:-20px -20px 20px -20px; display:flex; align-items:center; border-bottom:6px solid #FF8C00; height:135px;">{logo_html}<div><div style="font-size:28px; font-weight:bold;">HOTRIGO - INVOICE</div><div style="font-size:13px; margin-top:6px;">Invoice No: {booking_num} | Date: {datetime.now().strftime('%Y-%m-%d')}</div></div></div><div style="font-size:14px; line-height:28px;"><b>Agent:</b> {data['company']}<br><b>Invoice No:</b> {booking_num}<br><b>Hotel:</b> {data['hotel']}<br><b>Check-in:</b> {data['entry_date']} | <b>Check-out:</b> {data['exit_date']}<br><b>Room Type:</b> {data['room_type']} | <b>Rooms:</b> {data['room_count']}</div><div style="background:#f8f9fa; padding:12px 18px; border-radius:8px; font-size:14px; margin-top:12px; border-left:4px solid #FF8C00;"><b>Passengers:</b><br>{passengers_html}</div><div style="background:#f0f2f5; padding:18px; border-radius:10px; margin-top:22px; text-align:center; border:2px solid #0F2D5C;"><div style="font-size:26px; font-weight:bold; color:#0F2D5C;">Selling Price: ${float(data['sell']):,.2f}</div></div></div>"""
-    st.markdown(f"### معاينة الفاتورة - {booking_num}")
-    components.html(html_preview, height=560, scrolling=True)
-    st.download_button("⬇️ تحميل PDF", data=pdf_bytes, file_name=filename, mime="application/pdf", use_container_width=True, type="primary")
+    try:
+        _sheet = get_gspread_sheet()
+        ws = _sheet.spreadsheet.worksheet("Bookings")
+        all_vals = ws.get_all_values()
+        target_id = str(row[0]).strip()
+        full = None
+        for r in all_vals[1:]:
+            if r and str(r[0]).strip() == target_id:
+                full = r
+                break
+        if not full:
+            return
+        
+        def g(i, d=""):
+            return full[i] if len(full) > i else d
+
+        booking_num = g(15).strip() if g(15).strip() != "" else f"BOOK-{g(0)}"
+        rc = g(25) if len(full) > 25 and g(25) else 1
+        data={"company":g(4),"passengers":g(5),"hotel":g(6),"entry_date":g(2),"exit_date":g(3),"sell":g(12),"voucher":booking_num,"room_type":g(21) if g(21) else "","room_count":rc,"id":g(0)}
+        filename=f"{booking_num}_{sanitize_filename(data['passengers'])}.pdf"
+        full_path=Path.home() / "Desktop" / "invoice" / filename
+        pdf_bytes=generate_invoice_pdf(data, save_path=str(full_path))
+        logo_b64 = get_logo_b64()
+        logo_html = f"<img src='data:image/png;base64,{logo_b64}' style='width:110px;height:110px;object-fit:contain;background:white;border-radius:4px;padding:4px;margin-right:20px;'>" if logo_b64 else ""
+        passengers_html = "".join([f"<div style='padding:4px 0'>- {p.strip()}</div>" for p in str(data['passengers']).split('\n') if p.strip()])
+        html_preview = f"""<div style="background:white; border:1px solid #ddd; border-radius:12px; padding:20px; font-family:Arial; color:#222;"><div style="background:#0F2D5C; color:white; padding:12px 20px; border-radius:8px; margin:-20px -20px 20px -20px; display:flex; align-items:center; border-bottom:6px solid #FF8C00; height:135px;">{logo_html}<div><div style="font-size:28px; font-weight:bold;">HOTRIGO - INVOICE</div><div style="font-size:13px; margin-top:6px;">Invoice No: {booking_num} | Date: {datetime.now().strftime('%Y-%m-%d')}</div></div></div><div style="font-size:14px; line-height:28px;"><b>Agent:</b> {data['company']}<br><b>Invoice No:</b> {booking_num}<br><b>Hotel:</b> {data['hotel']}<br><b>Check-in:</b> {data['entry_date']} | <b>Check-out:</b> {data['exit_date']}<br><b>Room Type:</b> {data['room_type']} | <b>Rooms:</b> {data['room_count']}</div><div style="background:#f8f9fa; padding:12px 18px; border-radius:8px; font-size:14px; margin-top:12px; border-left:4px solid #FF8C00;"><b>Passengers:</b><br>{passengers_html}</div><div style="background:#f0f2f5; padding:18px; border-radius:10px; margin-top:22px; text-align:center; border:2px solid #0F2D5C;"><div style="font-size:26px; font-weight:bold; color:#0F2D5C;">Selling Price: ${float(data['sell'] or 0):,.2f}</div></div></div>"""
+        st.markdown(f"### معاينة الفاتورة - {booking_num}")
+        components.html(html_preview, height=560, scrolling=True)
+        st.download_button("⬇️ تحميل PDF", data=pdf_bytes, file_name=filename, mime="application/pdf", use_container_width=True, type="primary")
+    except Exception as e:
+        st.error(f"Error: {e}")
 
 @st.dialog("Booking Voucher - معاينة الفاوتشر", width="large")
 def voucher_dialog(row):
-    conn=sqlite3.connect(DB); full=conn.execute("SELECT * FROM bookings WHERE id=?", (int(row[0]),)).fetchone(); conn.close()
-    if not full: return
-    rc = full[25] if len(full)>25 and full[25] else 1
-    booking_no = full[15] if full[15] and str(full[15]).strip()!="" else f"HTG-{full[0]:06d}"
-    data={"sale_date":full[1],"booking_no":booking_no,"passengers":full[5],"hotel":full[6],"room_type":full[21] if len(full)>21 and full[21] else "","room_count":rc,"entry_date":full[2],"exit_date":full[3],"nights":full[7],"notes":full[16] if len(full)>16 and full[16] else "","sell":full[12]}
-    filename=f"VOUCHER_{booking_no}_{sanitize_filename(data['passengers'])}.pdf"
-    full_path=Path.home() / "Desktop" / "voucher" / filename
-    pdf_bytes=generate_voucher_pdf(data, save_path=str(full_path))
-    logo_b64 = get_logo_b64()
-    logo_html = f"<img src='data:image/png;base64,{logo_b64}' style='width:110px;height:110px;object-fit:contain;background:white;border-radius:4px;padding:4px;margin-right:20px;'>" if logo_b64 else ""
-    passengers_html = "".join([f"<div style='padding:5px 0; font-size:15px;'>- {p.strip()}</div>" for p in str(data['passengers']).split('\n') if p.strip()])
-    notes_html = f"<div style='margin-top:14px; background:#fffbe6; border-left:4px solid #FF8C00; padding:12px 16px; border-radius:6px; font-size:14px;'><b>Note:</b><br>{data['notes'].replace(chr(10), '<br>') if data['notes'] else 'No notes'}</div>" if data['notes'] else ""
-    html_preview = f"""
-    <div style="background:white; border:1px solid #ddd; border-radius:12px; padding:20px; font-family:Arial; color:#222;">
-        <div style="background:#0F2D5C; color:white; padding:12px 20px; border-radius:8px; margin:-20px -20px 20px -20px; display:flex; align-items:center; border-bottom:6px solid #FF8C00; height:135px;">
-            {logo_html}<div><div style="font-size:26px; font-weight:bold;">HOTRIGO - BOOKING VOUCHER</div><div style="font-size:13px; margin-top:6px;">Booking No: {booking_no} | Date: {data['sale_date']}</div></div>
+    try:
+        _sheet = get_gspread_sheet()
+        ws = _sheet.spreadsheet.worksheet("Bookings")
+        all_vals = ws.get_all_values()
+        target_id = str(row[0]).strip()
+        full = None
+        for r in all_vals[1:]:
+            if r and str(r[0]).strip() == target_id:
+                full = r
+                break
+        if not full:
+            return
+
+        def g(i, d=""):
+            return full[i] if len(full) > i else d
+
+        rc = g(25) if g(25) else 1
+        booking_no = g(15).strip() if g(15).strip() != "" else f"HTG-{int(g(0) or 0):06d}"
+        data={"sale_date":g(1),"booking_no":booking_no,"passengers":g(5),"hotel":g(6),"room_type":g(21) if g(21) else "","room_count":rc,"entry_date":g(2),"exit_date":g(3),"nights":g(7),"notes":g(16) if g(16) else "","sell":g(12)}
+        filename=f"VOUCHER_{booking_no}_{sanitize_filename(data['passengers'])}.pdf"
+        full_path=Path.home() / "Desktop" / "voucher" / filename
+        pdf_bytes=generate_voucher_pdf(data, save_path=str(full_path))
+        logo_b64 = get_logo_b64()
+        logo_html = f"<img src='data:image/png;base64,{logo_b64}' style='width:110px;height:110px;object-fit:contain;background:white;border-radius:4px;padding:4px;margin-right:20px;'>" if logo_b64 else ""
+        passengers_html = "".join([f"<div style='padding:5px 0; font-size:15px;'>- {p.strip()}</div>" for p in str(data['passengers']).split('\n') if p.strip()])
+        notes_html = f"<div style='margin-top:14px; background:#fffbe6; border-left:4px solid #FF8C00; padding:12px 16px; border-radius:6px; font-size:14px;'><b>Note:</b><br>{data['notes'].replace(chr(10), '<br>') if data['notes'] else 'No notes'}</div>" if data['notes'] else ""
+        html_preview = f"""
+        <div style="background:white; border:1px solid #ddd; border-radius:12px; padding:20px; font-family:Arial; color:#222;">
+            <div style="background:#0F2D5C; color:white; padding:12px 20px; border-radius:8px; margin:-20px -20px 20px -20px; display:flex; align-items:center; border-bottom:6px solid #FF8C00; height:135px;">
+                {logo_html}<div><div style="font-size:26px; font-weight:bold;">HOTRIGO - BOOKING VOUCHER</div><div style="font-size:13px; margin-top:6px;">Booking No: {booking_no} | Date: {data['sale_date']}</div></div>
+            </div>
+            <div style="background:#f8f9fa; padding:14px 18px; border-radius:8px; margin-bottom:14px; line-height:26px; font-size:14px;"><b>Booking No:</b> {booking_no}<br><b>Hotel:</b> {data['hotel']} | <b>Room Type:</b> {data['room_type']} | <b>Rooms:</b> {data['room_count']}<br><b>Check-in:</b> {data['entry_date']} | <b>Check-out:</b> {data['exit_date']} | <b>Nights:</b> {data['nights']}</div>
+            <div style="font-weight:bold; margin:12px 0 6px 0; font-size:15px;">Guest Names:</div>
+            <div style="background:#fff; border:1px solid #eee; border-left:4px solid #0F2D5C; padding:12px 18px; border-radius:6px;">{passengers_html}</div>{notes_html}
         </div>
-        <div style="background:#f8f9fa; padding:14px 18px; border-radius:8px; margin-bottom:14px; line-height:26px; font-size:14px;"><b>Booking No:</b> {booking_no}<br><b>Hotel:</b> {data['hotel']} | <b>Room Type:</b> {data['room_type']} | <b>Rooms:</b> {data['room_count']}<br><b>Check-in:</b> {data['entry_date']} | <b>Check-out:</b> {data['exit_date']} | <b>Nights:</b> {data['nights']}</div>
-        <div style="font-weight:bold; margin:12px 0 6px 0; font-size:15px;">Guest Names:</div>
-        <div style="background:#fff; border:1px solid #eee; border-left:4px solid #0F2D5C; padding:12px 18px; border-radius:6px;">{passengers_html}</div>{notes_html}
-    </div>
-    """
-    st.markdown(f"### 🧾 معاينة الفاوتشر - {booking_no} - {rc} Rooms")
-    components.html(html_preview, height=700, scrolling=True)
-    st.download_button("⬇️ تحميل / طباعة Voucher PDF", data=pdf_bytes, file_name=filename, mime="application/pdf", use_container_width=True, type="primary")
-    conn=sqlite3.connect(DB); full=conn.execute("SELECT * FROM bookings WHERE id=?", (int(row[0]),)).fetchone(); conn.close()
-    if not full: return
-    rc = full[25] if len(full)>25 and full[25] else 1
-    booking_no = full[15] if full[15] and str(full[15]).strip()!="" else f"HTG-{full[0]:06d}"
-    data={"sale_date":full[1],"booking_no":booking_no,"passengers":full[5],"hotel":full[6],"room_type":full[21] if len(full)>21 and full[21] else "","room_count":rc,"entry_date":full[2],"exit_date":full[3],"nights":full[7],"notes":full[16] if len(full)>16 and full[16] else "","sell":full[12]}
-    filename=f"VOUCHER_{booking_no}_{sanitize_filename(data['passengers'])}.pdf"
-    full_path=Path.home() / "Desktop" / "voucher" / filename
-    pdf_bytes=generate_voucher_pdf(data, save_path=str(full_path))
-    st.download_button("⬇️ تحميل Voucher", data=pdf_bytes, file_name=filename, mime="application/pdf", use_container_width=True, type="primary")
+        """
+        st.markdown(f"### 🧾 معاينة الفاوتشر - {booking_no} - {rc} Rooms")
+        components.html(html_preview, height=700, scrolling=True)
+        st.download_button("⬇️ تحميل / طباعة Voucher PDF", data=pdf_bytes, file_name=filename, mime="application/pdf", use_container_width=True, type="primary")
+    except Exception as e:
+        st.error(f"Error voucher: {e}")
 
 @st.dialog("Agent Statement", width="large")
 def agent_statement_dialog(agent_name):
-    conn=sqlite3.connect(DB)
-    bookings = pd.read_sql("SELECT * FROM bookings WHERE company=? ORDER BY entry_date", conn, params=(agent_name,))
-    payments = pd.read_sql("SELECT * FROM agent_payments WHERE agent=? ORDER BY pay_date DESC", conn, params=(agent_name,))
-    conn.close()
-    if bookings.empty:
-        st.warning(f"لا يوجد حجوزات للوكيل {agent_name}"); return
-    
-    pdf_bytes, total_sales, total_payments, balance = generate_agent_statement_pdf(agent_name, bookings, payments)
-    excel_bytes, _, _, _ = generate_agent_statement_excel(agent_name, bookings, payments)
-    filename_pdf = f"STATEMENT_{agent_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
-    full_path_pdf = Path.home() / "Desktop" / "statements" / filename_pdf
-    os.makedirs(os.path.dirname(full_path_pdf), exist_ok=True)
-    with open(full_path_pdf, "wb") as f: f.write(pdf_bytes)
-    upload_drive(str(full_path_pdf))
+    try:
+        _sheet = get_gspread_sheet()
+        spreadsheet = _sheet.spreadsheet
+        
+        # 1- Bookings من شيت Bookings
+        try:
+            b_ws = spreadsheet.worksheet("Bookings")
+            b_vals = b_ws.get_all_records()
+            bookings = pd.DataFrame(b_vals)
+            # فلترة حسب الشركة
+            if not bookings.empty and 'company' in bookings.columns:
+                bookings = bookings[bookings['company'].astype(str).str.strip() == str(agent_name).strip()]
+                if 'entry_date' in bookings.columns:
+                    bookings = bookings.sort_values(by='entry_date')
+            else:
+                # fallback اذا get_all_records فشل بسبب هيدر
+                bookings = pd.DataFrame()
+        except Exception as e:
+            bookings = pd.DataFrame()
 
-    # العنوان
-    st.markdown(f"### كشف حساب: {agent_name} - المبيعات ${total_sales:,.2f} - المدفوع ${total_payments:,.2f} - الباقي ${balance:,.2f}")
-    
-    # الزر الأحمر فوق
-    st.download_button("📄 تحميل PDF", data=pdf_bytes, file_name=filename_pdf, mime="application/pdf", use_container_width=True, type="primary")
+        # 2- Payments من شيت Payments
+        try:
+            p_ws = spreadsheet.worksheet("Payments")
+            p_vals = p_ws.get_all_records()
+            payments = pd.DataFrame(p_vals)
+            if not payments.empty:
+                # العمود اسمو Agent Name في الكود الجديد
+                col_name = 'Agent Name' if 'Agent Name' in payments.columns else 'agent' if 'agent' in payments.columns else payments.columns[1] if len(payments.columns)>1 else None
+                if col_name:
+                    payments = payments[payments[col_name].astype(str).str.strip() == str(agent_name).strip()]
+                    date_col = 'Pay Date' if 'Pay Date' in payments.columns else 'pay_date'
+                    if date_col in payments.columns:
+                        payments = payments.sort_values(by=date_col, ascending=False)
+        except Exception as e:
+            payments = pd.DataFrame()
 
-    # المعاينة تحت
-    import base64
-    b64 = base64.b64encode(pdf_bytes).decode()
-    st.markdown(f'<iframe src="data:application/pdf;base64,{b64}#toolbar=0" width="100%" height="700px" style="border:none;"></iframe>', unsafe_allow_html=True)
+        if bookings.empty:
+            st.warning(f"لا يوجد حجوزات للوكيل {agent_name}"); return
+        
+        pdf_bytes, total_sales, total_payments, balance = generate_agent_statement_pdf(agent_name, bookings, payments)
+        excel_bytes, _, _, _ = generate_agent_statement_excel(agent_name, bookings, payments)
+        filename_pdf = f"STATEMENT_{agent_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
+        full_path_pdf = Path.home() / "Desktop" / "statements" / filename_pdf
+        os.makedirs(os.path.dirname(full_path_pdf), exist_ok=True)
+        with open(full_path_pdf, "wb") as f: f.write(pdf_bytes)
+        try:
+            upload_drive(str(full_path_pdf))
+        except:
+            pass
+
+        st.markdown(f"### كشف حساب: {agent_name} - المبيعات ${total_sales:,.2f} - المدفوع ${total_payments:,.2f} - الباقي ${balance:,.2f}")
+        
+        st.download_button("📄 تحميل PDF", data=pdf_bytes, file_name=filename_pdf, mime="application/pdf", use_container_width=True, type="primary", key=f"dl_stmt_{agent_name}")
+
+        import base64
+        b64 = base64.b64encode(pdf_bytes).decode()
+        st.markdown(f'<iframe src="data:application/pdf;base64,{b64}#toolbar=0" width="100%" height="700px" style="border:none;"></iframe>', unsafe_allow_html=True)
+    except Exception as e:
+        st.error(f"Error statement: {e}")
 
 st.markdown("## ✈️ hotrigo | Sheets Sync ✅")
 t1,t2,t3=st.tabs(["Sales", "Account Statement", "Agents & Hotels"])
