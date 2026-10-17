@@ -25,6 +25,7 @@ except:
 BASE_DIR = os.path.dirname(__file__)
 DRIVE_FOLDER = "Hotrigo Backup"
 SHEET_NAME = "HOTRIGO_DATABASE"
+SHEET_ID = "1WyJlLeChys_qh_qCxjFUZBq-FlhgHbhBaizMcg21Zqc"
 SHEET_HEADER = ["ID","Agent","Passengers","Passengers Count","Hotel","Rooms","Room Type","Price Night","Hotel Total","Check-in","Nights","Check-out","Flight $","Transport $","Sell Price","Cost","Profit","Sale Date","Voucher No","Notes","Airline","Employee","Dep Time","Ret Time","Flight No Dep","Flight No Ret","Transport Co"]
 DB = os.path.join(BASE_DIR, "hotrigo.db")
 
@@ -80,7 +81,8 @@ def add_payment(tab_name, name_value, amount_val, note_val, note1_val):
         if not client:
             st.error("No sheet client - check secrets")
             return False
-        sh = client.open(SHEET_NAME)
+        # هون التغيير المهم - صار بالـ ID
+        sh = client.open_by_key(SHEET_ID)
         ws = sh.worksheet(tab_name)
         ws.append_row([
             datetime.now().strftime("%Y-%m-%d"),
@@ -102,21 +104,7 @@ def get_gspread_sheet(worksheet_name="reservations"):
         client = get_sheet_client()
         if not client:
             return None
-        sh = client.open(SHEET_NAME)
-        try:
-            ws = sh.worksheet(worksheet_name)
-        except:
-            ws = sh.sheet1 if worksheet_name == "reservations" else None
-        return ws
-    except Exception as e:
-        print(f"Sheet error {worksheet_name}: {e}")
-        return None
-def get_gspread_sheet(worksheet_name="reservations"):
-    try:
-        client = get_sheet_client()
-        if not client:
-            return None
-        sh = client.open(SHEET_NAME)
+        sh = client.open_by_key(SHEET_ID)
         try:
             ws = sh.worksheet(worksheet_name)
         except:
@@ -128,7 +116,7 @@ def get_gspread_sheet(worksheet_name="reservations"):
 
 def get_spreadsheet():
     c = get_sheet_client()
-    return c.open(SHEET_NAME) if c else None
+    return c.open_by_key(SHEET_ID) if c else None
 
 def upload_drive(local_path):
     def get_or_create_subfolder(service, parent_id, sub_name):
