@@ -7,6 +7,12 @@ import os, io, re, json, base64
 from pathlib import Path
 
 # ===== GOOGLE DRIVE + SHEETS =====
+import gspread
+from google.oauth2.service_account import Credentials
+
+# الـ ID تبعك من الصورة
+SHEET_ID_FALLBACK = "1WyJlLeChys_qh_qCxjFUZBq-FlhgHbhBaizMcg21Zqc"
+
 try:
     from google.oauth2 import service_account
     from googleapiclient.discovery import build
@@ -15,20 +21,53 @@ try:
 except:
     DRIVE_AVAILABLE = False
 
-try:
-    import gspread
-    from google.oauth2.service_account import Credentials as ServiceAccountCredentials
-    SHEETS_AVAILABLE = True
-except:
-    SHEETS_AVAILABLE = False
+SHEETS_AVAILABLE = True
 
 BASE_DIR = os.path.dirname(__file__)
 DRIVE_FOLDER = "Hotrigo Backup"
 SHEET_NAME = "HOTRIGO_DATABASE"
-SHEET_ID = "1WyJlLeChys_qh_qCxjFUZBq-FlhgHbhBaizMcg21Zqc"
+SHEET_ID = SHEET_ID_FALLBACK
 SHEET_HEADER = ["ID","Agent","Passengers","Passengers Count","Hotel","Rooms","Room Type","Price Night","Hotel Total","Check-in","Nights","Check-out","Flight $","Transport $","Sell Price","Cost","Profit","Sale Date","Voucher No","Notes","Airline","Employee","Dep Time","Ret Time","Flight No Dep","Flight No Ret","Transport Co"]
 DB = os.path.join(BASE_DIR, "hotrigo.db")
 
+def get_drive_service():
+    try:
+        creds_info = dict(st.secrets["gcp_service_account"])
+        if "\\n" in creds_info.get("private_key",""):
+            creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
+        creds = Credentials.from_service_account_info(creds_info, scopes=["https://www.googleapis.com/auth/drive"])
+        return build('drive', 'v3', credentials=creds)
+    except Exception as e:
+        return None
+
+def get_gspread_sheet(worksheet_name=None):
+    try:
+        # اذا SHEET_ID موجود بالـ Secrets بياخدو، اذا لا بياخد يلي فوق
+        try:
+            sid = st.secrets["SHEET_ID"]
+        except:
+            sid = SHEET_ID_FALLBACK
+        sid = str(sid).strip().strip('"').strip("'")
+
+        creds_info = dict(st.secrets["gcp_service_account"])
+        if "\\n" in creds_info.get("private_key",""):
+            creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
+
+        scopes = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+        client = gspread.authorize(creds)
+        ss = client.open_by_key(sid)
+
+        if worksheet_name:
+            try:
+                return ss.worksheet(worksheet_name)
+            except:
+                ws = ss.add_worksheet(title=worksheet_name, rows=2000, cols=30)
+                return ws
+        return ss.sheet1
+    except Exception as e:
+        st.error(f"❌ Sheet Error: {e}")
+        return None
 def get_drive_service():
     try:
         if "gdrive" not in st.secrets:
