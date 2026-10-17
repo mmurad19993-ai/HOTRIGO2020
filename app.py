@@ -7,21 +7,19 @@ import os, io, re, json, base64
 from pathlib import Path
 
 # ===== GOOGLE DRIVE + SHEETS =====
+import os, json, base64, re, io
 import gspread
+import pandas as pd
+import streamlit as st
+import streamlit.components.v1 as components
+from datetime import datetime
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 
-# الـ ID تبعك من الصورة
 SHEET_ID_FALLBACK = "1WyJlLeChys_qh_qCxjFUZBq-FlhgHbhBaizMcg21Zqc"
-
-try:
-    from google.oauth2 import service_account
-    from googleapiclient.discovery import build
-    from googleapiclient.http import MediaFileUpload
-    DRIVE_AVAILABLE = True
-except:
-    DRIVE_AVAILABLE = False
-
 SHEETS_AVAILABLE = True
+DRIVE_AVAILABLE = True
 
 BASE_DIR = os.path.dirname(__file__)
 DRIVE_FOLDER = "Hotrigo Backup"
@@ -36,51 +34,8 @@ def get_drive_service():
         if "\\n" in creds_info.get("private_key",""):
             creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
         creds = Credentials.from_service_account_info(creds_info, scopes=["https://www.googleapis.com/auth/drive"])
-        return build('drive', 'v3', credentials=creds)
-    except Exception as e:
-        return None
-
-def get_gspread_sheet(worksheet_name=None):
-    try:
-        # اذا SHEET_ID موجود بالـ Secrets بياخدو، اذا لا بياخد يلي فوق
-        try:
-            sid = st.secrets["SHEET_ID"]
-        except:
-            sid = SHEET_ID_FALLBACK
-        sid = str(sid).strip().strip('"').strip("'")
-
-        creds_info = dict(st.secrets["gcp_service_account"])
-        if "\\n" in creds_info.get("private_key",""):
-            creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
-
-        scopes = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
-        client = gspread.authorize(creds)
-        ss = client.open_by_key(sid)
-
-        if worksheet_name:
-            try:
-                return ss.worksheet(worksheet_name)
-            except:
-                ws = ss.add_worksheet(title=worksheet_name, rows=2000, cols=30)
-                return ws
-        return ss.sheet1
-    except Exception as e:
-        st.error(f"❌ Sheet Error: {e}")
-        return None
-def get_drive_service():
-    try:
-        if "gdrive" not in st.secrets:
-            return None, None
-        creds_dict = dict(st.secrets["gdrive"])
-        folder_id = creds_dict.pop("FOLDER_ID", None)
-        creds_dict.pop("folder_id", None)
-        pk = creds_dict.get("private_key", "")
-        if "\\n" in pk:
-            creds_dict["private_key"] = pk.replace("\\n", "\n")
-        creds = service_account.Credentials.from_service_account_info(
-            creds_dict, scopes=['https://www.googleapis.com/auth/drive'])
         service = build('drive', 'v3', credentials=creds)
+        folder_id = st.secrets.get("FOLDER_ID")
         return service, folder_id
     except Exception as e:
         print(f"Drive error: {e}")
@@ -97,32 +52,42 @@ def get_folder_id(service, name):
     except:
         return None
 
-def get_sheet_client():
+def get_gspread_sheet(worksheet_name=None):
     try:
-        if "gdrive" not in st.secrets:
-            return None
-        creds_dict = dict(st.secrets["gdrive"])
-        creds_dict.pop("FOLDER_ID", None)
-        creds_dict.pop("folder_id", None)
-        pk = creds_dict.get("private_key", "")
-        if "\\n" in pk:
-            creds_dict["private_key"] = pk.replace("\\n", "\n")
-        creds = ServiceAccountCredentials.from_service_account_info(
-            creds_dict, scopes=["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"])
-        return gspread.authorize(creds)
+        sid = st.secrets.get("SHEET_ID", SHEET_ID_FALLBACK)
+        sid = str(sid).strip().strip('"').strip("'")
+        creds_info = dict(st.secrets["gcp_service_account"])
+        if "\\n" in creds_info.get("private_key",""):
+            creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
+        scopes = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+        client = gspread.authorize(creds)
+        ss = client.open_by_key(sid)
+        if worksheet_name:
+            try:
+                return ss.worksheet(worksheet_name)
+            except:
+                return ss.add_worksheet(title=worksheet_name, rows=2000, cols=30)
+        return ss.sheet1
     except Exception as e:
-        print(f"Sheet client error: {e}")
+        st.error(f"❌ Sheet Error: {e}")
+        import traceback
+        st.code(traceback.format_exc())
+        return None
+
+def get_spreadsheet():
+    try:
+        ws = get_gspread_sheet()
+        return ws.spreadsheet if ws else None
+    except:
         return None
 
 def add_payment(tab_name, name_value, amount_val, note_val, note1_val):
     try:
-        client = get_sheet_client()
-        if not client:
-            st.error("No sheet client - check secrets")
+        ws = get_gspread_sheet(tab_name)
+        if not ws:
+            st.error("Sheet not connected")
             return False
-        # هون التغيير المهم - صار بالـ ID
-        sh = client.open_by_key(SHEET_ID)
-        ws = sh.worksheet(tab_name)
         ws.append_row([
             datetime.now().strftime("%Y-%m-%d"),
             str(name_value),
@@ -138,25 +103,6 @@ def add_payment(tab_name, name_value, amount_val, note_val, note1_val):
         st.error(f"Sheet Error {tab_name}: {e}")
         return False
 
-def get_gspread_sheet(worksheet_name="reservations"):
-    try:
-        client = get_sheet_client()
-        if not client:
-            return None
-        sh = client.open_by_key(SHEET_ID)
-        try:
-            ws = sh.worksheet(worksheet_name)
-        except:
-            ws = sh.sheet1 if worksheet_name == "reservations" else None
-        return ws
-    except Exception as e:
-        print(f"Sheet error {worksheet_name}: {e}")
-        return None
-
-def get_spreadsheet():
-    c = get_sheet_client()
-    return c.open_by_key(SHEET_ID) if c else None
-
 def upload_drive(local_path):
     def get_or_create_subfolder(service, parent_id, sub_name):
         try:
@@ -167,27 +113,19 @@ def upload_drive(local_path):
             folder=service.files().create(body={'name':sub_name,'mimeType':'application/vnd.google-apps.folder','parents':[parent_id]}, fields='id').execute()
             return folder.get('id')
         except: return parent_id
-
     try:
         service, folder_id_secret = get_drive_service()
         if service and os.path.exists(local_path):
-            # 1- جيب المجلد الرئيسي Hotrigo Backup
-            if folder_id_secret:
-                folder_id = folder_id_secret
-            else:
-                folder_id=get_folder_id(service, DRIVE_FOLDER)
-
+            folder_id = folder_id_secret or get_folder_id(service, DRIVE_FOLDER)
             if folder_id:
                 fname=os.path.basename(local_path)
                 up=fname.upper()
-                # 2- حدد المجلد الفرعي حسب اسم الملف
                 if up.startswith("BOOK-"):
                     folder_id = get_or_create_subfolder(service, folder_id, "Invoices")
                 elif up.startswith("VOUCHER_"):
                     folder_id = get_or_create_subfolder(service, folder_id, "Vouchers")
                 elif up.startswith("STATEMENT_"):
                     folder_id = get_or_create_subfolder(service, folder_id, "Statements")
-
                 q=f"name='{fname}' and '{folder_id}' in parents and trashed=false"
                 ex=service.files().list(q=q, fields="files(id)").execute()
                 for f in ex.get('files',[]):
@@ -195,198 +133,41 @@ def upload_drive(local_path):
                     except: pass
                 media=MediaFileUpload(local_path, resumable=True)
                 service.files().create(body={'name':fname,'parents':[folder_id]}, media_body=media).execute()
-                print(f"✅ API Upload: {fname} -> {folder_id}")
                 return True
     except Exception as e:
         print(f"Upload Error: {e}")
     return False
-
-def get_sheet_client():
-    try:
-        if "gdrive" not in st.secrets:
-            return None
-        creds_dict = dict(st.secrets["gdrive"])
-        creds_dict.pop("FOLDER_ID", None)
-        pk = creds_dict.get("private_key", "")
-        if "\\n" in pk:
-            creds_dict["private_key"] = pk.replace("\\n", "\n")
-        creds = service_account.Credentials.from_service_account_info(
-            creds_dict, scopes=['https://www.googleapis.com/auth/spreadsheets','https://www.googleapis.com/auth/drive'])
-        client = gspread.authorize(creds)
-        return client
-    except Exception as e:
-        print(f"Sheet Error: {e}")
-        return None
 
 def load_data():
     try:
         sheet = get_gspread_sheet()
         if not sheet:
             return []
-        records = sheet.get_all_records()
-        return records
+        return sheet.get_all_records()
     except Exception as e:
         print(f"Load error: {e}")
         return []
 
-from google.oauth2.service_account import Credentials
-
-def get_sheet_client():
-    try:
-        if "gdrive" not in st.secrets:
-            print("gdrive missing in secrets")
-            return None
-        creds_dict = dict(st.secrets["gdrive"])
-        # شيل الـ folder_id
-        creds_dict.pop("FOLDER_ID", None)
-        creds_dict.pop("folder_id", None)
-        creds_dict.pop("FOLDER_ID ", None)
-        
-        # تصليح \n بالـ private_key
-        if "private_key" in creds_dict:
-            creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
-        
-        scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-        client = gspread.authorize(creds)
-        print("✅ Sheet client connected")
-        return client
-    except Exception as e:
-        print(f"❌ Client error: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
-
-def get_gspread_sheet(worksheet_name="reservations"):
-    try:
-        client = get_sheet_client()
-        if not client:
-            print("get_sheet_client returned None")
-            return None
-        spreadsheet = client.open(SHEET_NAME)
-        try:
-            sheet = spreadsheet.worksheet(worksheet_name)
-        except:
-            if worksheet_name == "reservations":
-                sheet = spreadsheet.sheet1
-            else:
-                print(f"Worksheet {worksheet_name} not found")
-                return None
-        return sheet
-    except Exception as e:
-        print(f"❌ Sheet Error {worksheet_name}: {e}")
-        return None
-
-def get_spreadsheet():
-    client = get_sheet_client()
-    if not client:
-        return None
-    try:
-        return client.open(SHEET_NAME)
-    except Exception as e:
-        print(f"Spreadsheet open error: {e}")
-        return None
-
-def get_gspread_sheet(worksheet_name="reservations"):
-    try:
-        client = get_sheet_client()
-        if not client:
-            return None
-        spreadsheet = client.open(SHEET_NAME)
-        try:
-            sheet = spreadsheet.worksheet(worksheet_name)
-        except:
-            try:
-                sheet = spreadsheet.worksheet(worksheet_name.lower())
-            except:
-                sheet = spreadsheet.sheet1 if worksheet_name == "reservations" else None
-                if sheet is None:
-                    print(f"Worksheet {worksheet_name} not found")
-                    return None
-        # اذا الشيت فاضي تماما حط الهيدر بس للـ reservations
-        if worksheet_name == "reservations":
-            try:
-                vals = sheet.get_all_values()
-                if len(vals) == 0:
-                    sheet.append_row(SHEET_HEADER)
-            except:
-                pass
-        return sheet
-    except Exception as e:
-        print(f"Sheet open failed {worksheet_name}: {e}")
-        return None
-
-def get_spreadsheet():
-    client = get_sheet_client()
-    if not client:
-        return None
-    return client.open(SHEET_NAME)
-SHEET_HEADER = ["ID","Agent","Passengers","Passengers Count","Hotel","Rooms","Room Type","Price Night","Hotel Total","Check-in","Nights","Check-out","Flight $","Transport $","Sell Price","Cost","Profit","Sale Date","Voucher No","Notes","Airline","Employee","Dep Time","Ret Time","Flight No Dep","Flight No Ret","Transport Co"]
-
 def booking_to_sheet_row(b):
     try:
-        from datetime import datetime
-        
-        # ما عاد في sqlite - ناخد الداتا مباشر من الـ dict
-        try: 
-            d = dict(b)
-        except: 
-            d = {k: b[k] for k in b.keys()}
-
-        def gv(k, default=""):
-            v = d.get(k, default)
-            return "" if v is None else v
-
-        def to_f(v):
-            try: 
-                return float(str(v).replace(",", "").strip() or 0)
-            except: 
-                return 0.0
-
-        nights = 0
-        try:
-            en = datetime.strptime(str(gv("entry_date"))[:10], "%Y-%m-%d")
-            ex = datetime.strptime(str(gv("exit_date"))[:10], "%Y-%m-%d")
-            nights = max(0, (ex - en).days)
-        except:
-            pass
-
-        # رجع الصف بنفس ترتيب الهيدر تماما
-        row = []
-        for h in SHEET_HEADER:
-            if h == "Nights" or h == "Night":
-                row.append(nights)
-            else:
-                # نحاول نجيب القيمة - نجرب الاسم متل ما هو و small case
-                val = d.get(h, d.get(h.lower(), d.get(h.replace(" ", "_").lower(), "")))
-                row.append(val)
-        
-        return row
-
-    except Exception as e:
-        print(f"booking_to_sheet_row error: {e}")
-        return None
-
+        try: d = dict(b)
+        except: d = {k: b[k] for k in b.keys()}
         def gv(k, default=""):
             v = d.get(k, default)
             return "" if v is None else v
         def to_f(v):
             try: return float(str(v).replace(",", "").strip() or 0)
             except: return 0.0
-
         nights = 0
         try:
             en = datetime.strptime(str(gv("entry_date"))[:10], "%Y-%m-%d")
             ex = datetime.strptime(str(gv("exit_date"))[:10], "%Y-%m-%d")
             nights = max(0, (ex - en).days)
-        except: nights = 0
-
+        except: pass
         try: room_count = 0 if str(gv("room_count")).strip()=="" else int(float(str(gv("room_count"))))
         except: room_count = 0
-
         pax_names = str(gv("passengers")).strip()
         pax_count = len([x for x in pax_names.replace("\n",",").split(",") if x.strip()!=""]) if pax_names else 0
-
         sell = to_f(gv("sell"))
         pn = to_f(gv("price_per_night"))
         fl = to_f(gv("flight_cost"))
@@ -395,97 +176,43 @@ def booking_to_sheet_row(b):
         cost = hotel_total + fl + tr
         if room_count==0: cost = fl + tr
         profit = sell - cost
-
-        row = [
-            gv("id"),
-            gv("company"),
-            gv("passengers"),
-            pax_count,
-            gv("hotel"),
-            room_count,
-            gv("room_type"),
-            pn, # Price Night
-            hotel_total, # Hotel Total
-            gv("entry_date"), # Check-in
-            nights, # Nights
-            gv("exit_date"), # Check-out
-            fl, # Flight $
-            tr, # Transport $
-            sell, # Sell Price
-            cost, # Cost
-            profit, # Profit
-            gv("sale_date"),
-            gv("voucher_no"),
-            gv("notes"),
-            gv("airline"),
-            gv("emp"),
-            gv("flight_dep_time"),
-            gv("flight_ret_time"),
-            gv("flight_no_dep"),
-            gv("flight_no_ret"),
-            gv("transport_company"),
-        ]
+        row = [gv("id"),gv("company"),gv("passengers"),pax_count,gv("hotel"),room_count,gv("room_type"),pn,hotel_total,gv("entry_date"),nights,gv("exit_date"),fl,tr,sell,cost,profit,gv("sale_date"),gv("voucher_no"),gv("notes"),gv("airline"),gv("emp"),gv("flight_dep_time"),gv("flight_ret_time"),gv("flight_no_dep"),gv("flight_no_ret"),gv("transport_company"),]
         return [str(x) if x is not None else "" for x in row]
     except Exception as e:
-        print(f"booking_to_sheet_row error {e} for {b}")
+        print(f"booking_to_sheet_row error {e}")
         return None
 
 def sync_booking_to_sheet(booking_data):
     try:
         sheet = get_gspread_sheet()
-        if not sheet: 
-            return False
-        
-        # اذا بعتت dict بياخدو مباشر، اذا بعتت id قديم ما عاد يشتغل
-        # لازم تبعت الـ dict تبع الحجز
-        if isinstance(booking_data, dict):
-            b = booking_data
-            booking_id = str(b.get("id", b.get("ID", "")))
-        else:
-            # للتوافق القديم - بس ما رح يلاقي شي لانو لغينا اللوكال
-            print(f"Please pass dict not ID: {booking_data}")
-            return False
-
+        if not sheet: return False
+        if not isinstance(booking_data, dict): return False
+        b = booking_data
+        booking_id = str(b.get("id", b.get("ID", "")))
         row = booking_to_sheet_row(b)
-        if not row: 
-            return False
-
+        if not row: return False
         try:
-            # حاول تلاقي الـ ID بالشيت وتعمل update
             cell = sheet.find(booking_id)
             sheet.update(f"A{cell.row}:AA{cell.row}", [row])
-            print(f"✅ Updated ID {booking_id}")
         except:
-            # اذا مو موجود اعمل append جديد
             sheet.append_row(row, value_input_option='USER_ENTERED')
-            print(f"✅ Appended ID {booking_id}")
-        
         return True
-        
     except Exception as e:
-        print(f"Sync failed {booking_data}: {e}")
+        print(f"Sync failed {e}")
         return False
+
 def sync_all_to_sheet():
-    """Disabled - هاد الفنكشن كان يمسح الشيت كلو بـ clear() لهيك لغيناه"""
-    print("sync_all_to_sheet is disabled - all data now lives on Google Sheet directly")
     return True
 
-# --- PDF Imports - طريقة آمنة بدون os.system ---
+# --- PDF Imports ---
 try:
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.pdfgen import canvas
     REPORTLAB_AVAILABLE = True
 except ImportError:
     REPORTLAB_AVAILABLE = False
-    # لا تستخدم os.system داخل Streamlit - بيعمل مشاكل
-    print("reportlab not installed, add it to requirements.txt")
-
-# --- تم الغاء قاعدة البيانات المحلية ---
-# DB = os.path.join(os.path.dirname(__file__), "hotrigo.db")  <- ملغي، ما عاد نحتاجو
-# كل الحفظ صار مباشر على Google Sheet
 
 LOGO_PATH = os.path.join(os.path.dirname(__file__), "logo.png")
-# اذا اللوغو مو موجود على GitHub رح يطلع تحذير بس ما رح يوقف البرنامج
 def get_logo_b64():
     if os.path.exists(LOGO_PATH):
         try:
@@ -496,402 +223,17 @@ def get_logo_b64():
     return None
 
 def init():
-    """
-    Init الجديد - ما عاد في sqlite ولا DB
-    كل شي صار على Google Sheet مباشر
-    """
     try:
         sheet = get_gspread_sheet()
         if sheet:
             try:
-                # اذا الشيت فاضي، حط الهيدر
                 first_row = sheet.row_values(1)
                 if not first_row or len(first_row) == 0:
                     sheet.update('A1', [SHEET_HEADER])
-                    print("✅ Header created in Sheet")
-            except Exception as e:
-                print(f"Header check: {e}")
-        print("✅ Init done - Google Sheet ready")
-    except Exception as e:
-        print(f"Init warning: {e}")
-    
+            except: pass
+    except: pass
     return True
 init()
-
-if "pending" not in st.session_state:
-    st.session_state["pending"] = None
-if "do_clear" not in st.session_state:
-    st.session_state["do_clear"] = False
-if "table_version" not in st.session_state:
-    st.session_state["table_version"] = 0
-if "search_mode" not in st.session_state:
-    st.session_state["search_mode"] = "بحث"
-
-if st.session_state["do_clear"]:
-    for k in ["emp","pas","comp","hotel","pn","fl","tr","sell","air","note","vno","sd","ed","xd","ftd","ftr","fti","fto"]:
-        if k in st.session_state:
-            try: del st.session_state[k]
-            except: pass
-    st.session_state["do_clear"] = False
-    st.session_state["pending"] = None
-
-def to_f(s):
-    try: return float(str(s).replace(",","").strip()) if str(s).strip()!="" else 0.0
-    except: return 0.0
-
-def smart_match(input_val, full_list, upper_list):
-    v = input_val.strip().upper()
-    if not v or v=="0": return "", True
-    if v in upper_list: return full_list[upper_list.index(v)], True
-    return input_val, False
-
-def sanitize_filename(name):
-    name = str(name).split('\n')[0].strip()
-    name = re.sub(r'[\\/*?:"<>|]', '', name).replace(' ', '_')
-    return name[:60] if name else "Traveler"
-
-def clear_filters():
-    st.session_state.entry_date_filter=None
-    st.session_state.exit_date_filter=None
-    st.session_state.search=""
-    st.session_state.search_mode="الكل"
-
-def generate_invoice_pdf(data, save_path=None):
-    buffer = io.BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
-    HEADER_H = 135
-    c.setFillColorRGB(0.06, 0.18, 0.36)
-    c.rect(0, height-HEADER_H, width, HEADER_H, fill=1, stroke=0)
-    c.setFillColorRGB(1, 0.55, 0)
-    c.rect(0, height-HEADER_H-6, width, 6, fill=1, stroke=0)
-    has_logo = os.path.exists(LOGO_PATH)
-    booking_num = data.get('voucher','') or data.get('booking_no','') or f"BOOK-{data.get('id','')}"
-    if has_logo:
-        try:
-            c.drawImage(LOGO_PATH, 20, height-HEADER_H+12, width=110, height=110, preserveAspectRatio=True, mask='auto')
-            c.setFillColorRGB(1,1,1)
-            c.setFont("Helvetica-Bold", 28)
-            c.drawString(145, height-55, "HOTRIGO - INVOICE")
-            c.setFont("Helvetica", 11)
-            c.drawString(145, height-75, f"Invoice No: {booking_num} | Date: {datetime.now().strftime('%Y-%m-%d')}")
-        except:
-            c.setFillColorRGB(1,1,1)
-            c.setFont("Helvetica-Bold", 28)
-            c.drawString(30, height-60, "HOTRIGO - INVOICE")
-    else:
-        c.setFillColorRGB(1,1,1)
-        c.setFont("Helvetica-Bold", 28)
-        c.drawString(30, height-60, "HOTRIGO - INVOICE")
-        c.setFont("Helvetica", 11)
-        c.drawString(30, height-80, f"Invoice No: {booking_num} | Date: {datetime.now().strftime('%Y-%m-%d')}")
-    c.setFillColorRGB(0,0,0)
-    y = height-HEADER_H-40
-    c.setFont("Helvetica-Bold", 13)
-    c.drawString(30, y, f"Agent: {data.get('company','')}")
-    y-=24; c.drawString(30, y, f"Invoice No: {booking_num}"); y-=24
-    c.drawString(30, y, f"Hotel: {data.get('hotel','')}"); y-=24
-    c.drawString(30, y, f"Check-in: {data.get('entry_date','')} | Check-out: {data.get('exit_date','')}"); y-=24
-    c.drawString(30, y, f"Room Type: {data.get('room_type','')} | Rooms: {data.get('room_count',1)}"); y-=32
-    c.setFont("Helvetica-Bold", 12); c.drawString(30, y, "Passengers:"); y-=20
-    c.setFont("Helvetica", 11)
-    for name in str(data.get('passengers','')).strip().split('\n'):
-        if name.strip():
-            c.drawString(45, y, f"- {name.strip()}"); y-=18
-            if y < 150:
-                c.showPage(); y = height-50; c.setFont("Helvetica", 11)
-    y-=30
-    c.setFillColorRGB(0.95,0.95,0.95); c.rect(30, y-15, width-60, 60, fill=1, stroke=0)
-    c.setFillColorRGB(0.06, 0.18, 0.36); c.setFont("Helvetica-Bold", 22)
-    c.drawString(40, y+15, f"Selling Price: ${float(data.get('sell',0)):,.2f}")
-    c.showPage(); c.save()
-    pdf_bytes=buffer.getvalue(); buffer.close()
-    if save_path:
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        with open(save_path, "wb") as f: f.write(pdf_bytes)
-        upload_drive(save_path)
-    return pdf_bytes
-
-def generate_voucher_pdf(data, save_path=None):
-    buffer = io.BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
-    HEADER_H = 135
-    c.setFillColorRGB(0.06, 0.18, 0.36); c.rect(0, height-HEADER_H, width, HEADER_H, fill=1, stroke=0)
-    c.setFillColorRGB(1, 0.55, 0); c.rect(0, height-HEADER_H-6, width, 6, fill=1, stroke=0)
-    has_logo = os.path.exists(LOGO_PATH)
-    if has_logo:
-        try:
-            c.drawImage(LOGO_PATH, 20, height-HEADER_H+12, width=110, height=110, preserveAspectRatio=True, mask='auto')
-            c.setFillColorRGB(1,1,1); c.setFont("Helvetica-Bold", 26)
-            c.drawString(145, height-55, "HOTRIGO - BOOKING VOUCHER")
-            c.setFont("Helvetica", 11)
-            c.drawString(145, height-75, f"tourism2020-hotrigo | {datetime.now().strftime('%d-%m-%Y')}")
-        except:
-            c.setFillColorRGB(1,1,1); c.setFont("Helvetica-Bold", 26)
-            c.drawString(30, height-60, "HOTRIGO - BOOKING VOUCHER")
-    else:
-        c.setFillColorRGB(1,1,1); c.setFont("Helvetica-Bold", 26)
-        c.drawString(30, height-60, "HOTRIGO - BOOKING VOUCHER")
-    c.setFillColorRGB(0,0,0); y = height-HEADER_H-30
-    c.setFillColorRGB(0.96,0.96,0.96); c.rect(30, y-45, width-60, 45, fill=1, stroke=0)
-    c.setFillColorRGB(0,0,0); c.setFont("Helvetica-Bold", 11)
-    c.drawString(40, y-10, f"Booking Date: {data.get('sale_date','')}")
-    c.drawString(40, y-30, f"Booking No: {data.get('booking_no','')}"); y -= 75
-    c.setFont("Helvetica-Bold", 13); c.drawString(30, y, "Guest Names:"); y -= 20
-    c.setFont("Helvetica", 12)
-    for idx, name in enumerate(str(data.get('passengers','')).strip().split('\n'), 1):
-        if name.strip(): c.drawString(40, y, f"{idx}. {name.strip()}"); y -= 18
-    y -= 15; c.line(30, y, width-30, y); y -= 25
-    c.setFont("Helvetica-Bold", 12); c.drawString(30, y, "Hotel Details:"); y -= 22
-    c.setFont("Helvetica", 11)
-    rc = data.get('room_count',1)
-    c.drawString(40, y, f"Hotel: {data.get('hotel','')} - Rooms: {rc}"); y -= 18
-    c.drawString(40, y, f"Room Type: {data.get('room_type','')}"); y -= 18
-    c.drawString(40, y, f"Check-in: {data.get('entry_date','')} | Check-out: {data.get('exit_date','')} | Nights: {data.get('nights','')}")
-    y -= 30
-    notes = data.get('notes','') or ''
-    if notes.strip():
-        c.setFont("Helvetica-Bold", 11); c.drawString(30, y, "Note:"); y-=18; c.setFont("Helvetica", 11)
-        for line in notes.split('\n'):
-            if line.strip(): c.drawString(40, y, line.strip()[:100]); y-=18
-    c.showPage(); c.save()
-    pdf_bytes=buffer.getvalue(); buffer.close()
-    if save_path:
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        with open(save_path, "wb") as f: f.write(pdf_bytes)
-        upload_drive(save_path)
-    return pdf_bytes
-
-def generate_agent_statement_excel(agent_name, bookings_df, payments_df):
-    import io
-    buffer = io.BytesIO()
-    try: import openpyxl
-    except: 
-        import os
-        os.system("pip install openpyxl")
-        import openpyxl
-    from datetime import datetime
-    import pandas as pd
-
-    def _parse_date(d):
-        if not d or pd.isna(d): return None
-        for fmt in ("%Y-%m-%d","%d/%m/%Y","%d-%m-%Y","%Y/%m/%d"):
-            try: return datetime.strptime(str(d).strip(), fmt)
-            except: pass
-        return None
-
-    def _first_pax(pas):
-        if not pas or pd.isna(pas): return ""
-        s = str(pas).replace('\r','\n').strip()
-        lines = [x.strip() for x in s.split('\n') if x.strip()]
-        return lines[0].split(',')[0].strip() if lines else ""
-
-    def _count_pax(pas):
-        if not pas or pd.isna(pas): return 0
-        s = str(pas).replace('\r','\n').strip()
-        lines = [x.strip() for x in s.split('\n') if x.strip()]
-        if len(lines) > 1: return len(lines)
-        if ',' in s: return len([x for x in s.split(',') if x.strip()])
-        return 1 if s else 0
-
-    total_sales = bookings_df['sell'].sum() if not bookings_df.empty and 'sell' in bookings_df.columns else 0
-    total_payments = payments_df['amount'].sum() if not payments_df.empty and 'amount' in payments_df.columns else 0
-    balance = total_sales - total_payments
-
-    data = []
-    if not bookings_df.empty:
-        for _, r in bookings_df.iterrows():
-            ent = _parse_date(r.get('entry_date'))
-            ex = _parse_date(r.get('exit_date'))
-            nights = (ex - ent).days if ent and ex else ""
-            data.append({
-                'رقم الحجز': r.get('id',''),
-                'اسم الوكيل': r.get('company', agent_name),
-                'اسم اول مسافر': _first_pax(r.get('passengers','')),
-                'عدد الاشخاص': _count_pax(r.get('passengers','')),
-                'الفندق': r.get('hotel',''),
-                'نوع الغرف': r.get('room_type',''),
-                'عدد الغرف': r.get('room_count',''),
-                'تاريخ الدخول': r.get('entry_date',''),
-                'الليالي': nights,
-                'تاريخ الخروج': r.get('exit_date',''),
-                'سعر المبيع': r.get('sell',''),
-                'الملاحظة': r.get('notes',''),
-            })
-        book_export = pd.DataFrame(data)
-    else:
-        book_export = pd.DataFrame()
-
-    if not payments_df.empty:
-        cols_exist = [c for c in ['pay_date','amount','note'] if c in payments_df.columns]
-        pay_export = payments_df[cols_exist].copy()
-        rename_map = {'pay_date':'تاريخ الدفعة','amount':'قيمة الدفعة','note':'ملاحظة الدفعة'}
-        pay_export.rename(columns={k:v for k,v in rename_map.items() if k in pay_export.columns}, inplace=True)
-    else:
-        pay_export = pd.DataFrame()
-
-    summary_df = pd.DataFrame([{'الوكيل': agent_name, 'اجمالي الحجوزات': total_sales, 'اجمالي الدفعات': total_payments, 'الرصيد المتبقي': balance}])
-
-    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        if not book_export.empty:
-            book_export.to_excel(writer, sheet_name='الحجوزات', index=False)
-        else:
-            pd.DataFrame([{'ملاحظة':'لا يوجد حجوزات'}]).to_excel(writer, sheet_name='الحجوزات', index=False)
-        if not pay_export.empty:
-            pay_export.to_excel(writer, sheet_name='الدفعات', index=False)
-        else:
-            pd.DataFrame([{'ملاحظة':'لا يوجد دفعات'}]).to_excel(writer, sheet_name='الدفعات', index=False)
-        summary_df.to_excel(writer, sheet_name='الملخص', index=False)
-
-    buffer.seek(0)
-    return buffer.getvalue(), total_sales, total_payments, balance
-
-def generate_agent_statement_pdf(agent_name, bookings_df, payments_df):
-    buffer = io.BytesIO()
-    pagesize_land = landscape(A4)
-    c = canvas.Canvas(buffer, pagesize=pagesize_land)
-    width, height = pagesize_land
-    HEADER_H = 95
-
-    total_sales = float(bookings_df['sell'].sum()) if 'sell' in bookings_df and not bookings_df.empty else 0
-    total_payments = float(payments_df['amount'].sum()) if not payments_df.empty and 'amount' in payments_df else 0
-    balance = total_sales - total_payments
-
-    c.setFillColorRGB(0.06, 0.18, 0.36); c.rect(0, height-HEADER_H, width, HEADER_H, fill=1, stroke=0)
-    c.setFillColorRGB(1, 0.55, 0); c.rect(0, height-HEADER_H-5, width, 5, fill=1, stroke=0)
-    has_logo = os.path.exists(LOGO_PATH)
-    if has_logo:
-        try: c.drawImage(LOGO_PATH, 25, height-88, width=80, height=75, preserveAspectRatio=True, mask='auto')
-        except: pass
-    c.setFillColorRGB(1,1,1); c.setFont("Helvetica-Bold", 20)
-    c.drawString(120 if has_logo else 30, height-38, f"AGENT STATEMENT - {agent_name}")
-    c.setFont("Helvetica", 10)
-    c.drawString(120 if has_logo else 30, height-58, f"Date: {datetime.now().strftime('%d/%m/%Y')} | {len(bookings_df)} bookings | tourism2020-hotrigo")
-    c.setFillColorRGB(0,0,0); y = height-HEADER_H-25
-    c.setFont("Helvetica-Bold", 11); c.drawString(30, y, f"Agent: {agent_name}"); y-=25
-
-    # ===== فوق - مربع كبير =====
-    c.setFillColorRGB(1, 0.95, 0.85); c.rect(30, y-50, width-60, 50, fill=1, stroke=0)
-    c.setStrokeColorRGB(0.8,0,0); c.setLineWidth(1); c.rect(30, y-50, width-60, 50, fill=0, stroke=1)
-    c.setFillColorRGB(0,0,0); c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y-15, f"Total Sales: ${total_sales:.2f} | Total Payments: ${total_payments:.2f} | Balance: ${balance:.2f}")
-    c.setFillColorRGB(0.8,0,0) if balance>0 else c.setFillColorRGB(0,0.5,0)
-    c.setFont("Helvetica-Bold", 16); c.drawString(40, y-38, f"REMAINING BALANCE: ${balance:.2f}")
-    c.setFillColorRGB(0,0,0)
-    y -= 75
-
-    left = 30; right = width - 30; usable = right - left
-    col_book = left + 5; col_pass = left + 75; col_rooms = left + 195; col_type = left + 235; col_checkin = left + 290; col_checkout = left + 375; col_sell = left + 465; col_note = left + 530
-    c.setFillColorRGB(0.9,0.9,0.9); c.rect(left, y-16, usable, 18, fill=1, stroke=0)
-    c.setFillColorRGB(0,0,0); c.setFont("Helvetica-Bold", 9)
-    c.drawString(col_book, y-12, "Booking No"); c.drawString(col_pass, y-12, "Passenger"); c.drawString(col_rooms, y-12, "Rooms"); c.drawString(col_type, y-12, "Type"); c.drawString(col_checkin, y-12, "Check-in"); c.drawString(col_checkout, y-12, "Check-out"); c.drawString(col_sell, y-12, "Sell"); c.drawString(col_note, y-12, "Note")
-    y-=32; c.setFont("Helvetica", 9)
-    for _, row in bookings_df.iterrows():
-        if y < 150:
-            c.showPage(); y = height-40; c.setFont("Helvetica-Bold", 9)
-            c.setFillColorRGB(0.9,0.9,0.9); c.rect(left, y-16, usable, 18, fill=1, stroke=0)
-            c.setFillColorRGB(0,0,0); c.drawString(col_book, y-12, "Booking No"); c.drawString(col_pass, y-12, "Passenger"); c.drawString(col_rooms, y-12, "Rooms"); c.drawString(col_type, y-12, "Type"); c.drawString(col_checkin, y-12, "Check-in"); c.drawString(col_checkout, y-12, "Check-out"); c.drawString(col_sell, y-12, "Sell"); c.drawString(col_note, y-12, "Note")
-            y-=32; c.setFont("Helvetica", 9)
-        bno = str(row['booking_no']) if 'booking_no' in row and pd.notna(row['booking_no']) and str(row['booking_no']).strip()!="" else f"HTG-{int(row['id']):06d}" if 'id' in row and pd.notna(row['id']) else ""
-        pas = str(row['passengers']).split('\n')[0][:20] if 'passengers' in row and pd.notna(row['passengers']) else ""
-        rc = str(row['room_count']) if 'room_count' in row and pd.notna(row['room_count']) else "1"
-        rtype = str(row['room_type'])[:10] if 'room_type' in row and pd.notna(row['room_type']) else ""
-        entry = str(row['entry_date'])[:10] if 'entry_date' in row else ""
-        exit_d = str(row['exit_date'])[:10] if 'exit_date' in row else ""
-        sell = float(row['sell']) if 'sell' in row and pd.notna(row['sell']) else 0
-        note = str(row['notes'])[:18] if 'notes' in row and pd.notna(row['notes']) else ""
-        c.drawString(col_book, y, bno[:12]); c.drawString(col_pass, y, pas); c.drawString(col_rooms, y, rc); c.drawString(col_type, y, rtype); c.drawString(col_checkin, y, entry); c.drawString(col_checkout, y, exit_d); c.drawString(col_sell, y, f"{sell:.0f}"); c.drawString(col_note, y, note)
-        y-=12; c.line(left, y, right, y); y-=22
-    y-=12; c.line(left, y, right, y); y-=22; c.setFont("Helvetica-Bold", 11); c.drawString(left, y, "Payments:"); y-=20
-    c.setFillColorRGB(0.9,0.9,0.9); c.rect(left, y-16, usable, 18, fill=1, stroke=0); c.setFillColorRGB(0,0,0); c.setFont("Helvetica-Bold", 9)
-    c.drawString(left+5, y-12, "Pay Date"); c.drawString(left+125, y-12, "Amount"); c.drawString(left+300, y-12, "Note")
-    y-=32; c.setFont("Helvetica", 9)
-    if not payments_df.empty:
-        for _, p in payments_df.iterrows():
-            if y < 140: c.showPage(); y = height-40; c.setFont("Helvetica", 9)
-            pd_date = str(p['pay_date'])[:10]; amt = float(p['amount']) if p['amount'] else 0
-            c.drawString(left+5, y, pd_date); c.drawString(left+125, y, f"${amt:.2f}"); c.drawString(left+300, y, str(p['note'])[:40] if pd.notna(p['note']) else "")
-            y-=12; c.line(left, y, right, y); y-=16
-    else: c.drawString(left+5, y, "No payments yet"); y-=16
-
-    # ===== تحت - مربع كبير =====
-    y-=20; c.line(left, y, right, y); y-=40
-    if y < 90: c.showPage(); y = height-60
-    c.setFillColorRGB(1, 0.95, 0.85); c.rect(30, y-50, width-60, 50, fill=1, stroke=0)
-    c.setStrokeColorRGB(0.8,0,0); c.setLineWidth(1); c.rect(30, y-50, width-60, 50, fill=0, stroke=1)
-    c.setFillColorRGB(0,0,0); c.setFont("Helvetica-Bold", 12)
-    c.drawString(40, y-15, f"Total Sales: ${total_sales:.2f} | Total Payments: ${total_payments:.2f} | Balance: ${balance:.2f}")
-    c.setFillColorRGB(0.8,0,0) if balance>0 else c.setFillColorRGB(0,0.5,0)
-    c.setFont("Helvetica-Bold", 16); c.drawString(40, y-38, f"REMAINING BALANCE: ${balance:.2f}")
-
-    c.showPage(); c.save()
-    pdf_bytes=buffer.getvalue(); buffer.close()
-    return pdf_bytes, total_sales, total_payments, balance
-
-st.set_page_config(page_title="hotrigo", page_icon="✈️", layout="wide")
-
-# --- DB اللوكال ملغي - تحميل القوائم من الشيت مباشر ---
-agents_for_js = []
-hotels_for_js = []
-airlines_for_js = []
-transport_for_js = []
-try:
-    _sheet_js = get_gspread_sheet()
-    if _sheet_js:
-        _all = _sheet_js.get_all_values()
-        if len(_all) > 1:
-            for _r in _all[1:]:
-                try:
-                    if len(_r) > 3 and _r[3].strip(): agents_for_js.append(_r[3].strip())
-                    if len(_r) > 6 and _r[6].strip(): hotels_for_js.append(_r[6].strip())
-                    if len(_r) > 18 and _r[18].strip(): airlines_for_js.append(_r[18].strip())
-                    if len(_r) > 22 and _r[22].strip(): transport_for_js.append(_r[22].strip())
-                except:
-                    continue
-            agents_for_js = sorted(list(set(agents_for_js)))
-            hotels_for_js = sorted(list(set(hotels_for_js)))
-            airlines_for_js = sorted(list(set(airlines_for_js)))
-            transport_for_js = sorted(list(set(transport_for_js)))
-except:
-    pass
-
-agents_upper=[a.upper() for a in agents_for_js]
-hotels_upper=[h.upper() for h in hotels_for_js]
-airlines_upper=[a.upper() for a in airlines_for_js]
-transport_upper=[a.upper() for a in transport_for_js]
-
-js_template = """
-<script>
-const doc = window.parent.document;
-const AGENTS = __AGENTS__;
-const HOTELS = __HOTELS__;
-const AIRLINES = __AIRLINES__;
-const TRANSPORT = __TRANSPORT__;
-function isSearchField(input){if(!input) return false; const ph=(input.getAttribute('placeholder')||'').toLowerCase(); const cont=input.closest('div[data-testid="stTextInput"], div[data-testid="stTextArea"]'); const txt=cont?(cont.innerText||'').toLowerCase():''; return ph.includes('search')||txt.includes('search');}
-function killAutofill(){doc.querySelectorAll('div[data-testid="stTextInput"] input, div[data-testid="stTextArea"] textarea, div[data-testid="stNumberInput"] input').forEach(inp=>{if(isSearchField(inp)) return; if(inp.type==='hidden') return; inp.setAttribute('autocomplete','off'); inp.removeAttribute('list');}); doc.querySelectorAll('datalist').forEach(d=>d.remove());}
-killAutofill(); setTimeout(killAutofill,200); setInterval(killAutofill,1500);
-function isCalendarOpen(){return doc.querySelector('div[data-baseweb="calendar"], div[data-baseweb="datepicker"]')!== null;}
-function getActiveContainer(){const dlg=doc.querySelector('div[data-testid="stDialog"], div[role="dialog"]'); if(dlg&&dlg.offsetParent!==null&&dlg.querySelector('input, textarea')){return dlg;} return doc;}
-function getFieldType(input){if(isSearchField(input)) return 'SEARCH'; const cont=input.closest('div[data-testid="stTextInput"], div[data-testid="stTextArea"], div[data-testid="stDateInput"], div[data-testid="stNumberInput"]'); if(!cont) return null; const testId=cont.getAttribute('data-testid')||''; if(testId.includes('stDateInput')) return 'DATE'; if(testId.includes('stNumberInput')) return 'NUMBER'; const txt=(cont.innerText||'').toLowerCase(); if(txt.includes('agent')) return 'AGENT'; if(txt.includes('hotel')) return 'HOTEL'; if(txt.includes('airline')) return 'AIRLINE'; if(txt.includes('transport')) return 'TRANSPORT'; if(txt.includes('passengers')) return 'PASSENGERS'; if(txt.includes('room type')) return 'ROOM'; return 'OTHER';}
-function getFields(){const container=getActiveContainer(); const els=Array.from(container.querySelectorAll('input:not([type=hidden]), textarea')); return els.filter(e=>e.offsetParent!==null&&!e.disabled&&e.type!=='checkbox'&&e.type!=='radio'&&e.getClientRects().length>0);}
-function setNativeValue(input,value){const lastValue=input.value; input.value=value; if(input._valueTracker)input._valueTracker.setValue(lastValue); try{const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input),'value').set; setter.call(input,value);}catch(e){} input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true})); if(getFieldType(input)!=='PASSENGERS'){setTimeout(()=>{input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));},20);}}
-function insertNewLinePassengers(textarea){const start=textarea.selectionStart; const end=textarea.selectionEnd; const text=textarea.value; const newText=text.substring(0,start)+"\\n"+text.substring(end); const newPos=start+1; const lastValue=textarea.value; textarea.value=newText; if(textarea._valueTracker)textarea._valueTracker.setValue(lastValue); try{const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(textarea),'value').set; setter.call(textarea,newText);}catch(e){} textarea.dispatchEvent(new Event('input',{bubbles:true})); textarea.dispatchEvent(new Event('change',{bubbles:true})); textarea.selectionStart=textarea.selectionEnd=newPos; textarea.focus();}
-function findNearest(active,dir){const fields=getFields(); const ar=active.getBoundingClientRect(); const acx=ar.left+ar.width/2; const acy=ar.top+ar.height/2; let candidates=[]; for(let f of fields){if(f===active)continue; const r=f.getBoundingClientRect(); const cx=r.left+r.width/2; const cy=r.top+r.height/2; if(dir==='left'&&r.left<ar.left-5){candidates.push({f,dist:acx-cx,cy:Math.abs(acy-cy)});} if(dir==='right'&&r.left>ar.right+5){candidates.push({f,dist:cx-acx,cy:Math.abs(acy-cy)});} if(dir==='down'&&r.top>ar.top+5){candidates.push({f,dist:cy-acy,cx:Math.abs(acx-cx)});} if(dir==='up'&&r.bottom<ar.bottom-5){candidates.push({f,dist:acy-cy,cx:Math.abs(acx-cx)});}} if(!candidates.length) return null; if(dir==='left'||dir==='right'){candidates.sort((a,b)=>{if(Math.abs(a.cy-b.cy)>20) return a.cy-b.cy; return a.dist-b.dist;});} else {candidates.sort((a,b)=>{if(Math.abs(a.cx-b.cx)>80) return a.cx-b.cx; return a.dist-b.dist;});} return candidates[0].f;}
-function moveToNext(input){const fields=getFields(); let idx=fields.indexOf(input); if(idx!==-1&&idx+1<fields.length){setTimeout(()=>{const n=fields[idx+1]; if(n){n.focus(); try{n.select();}catch(e){}}},60);}}
-function moveToPrev(input){const fields=getFields(); let idx=fields.indexOf(input); if(idx>0){setTimeout(()=>{const p=fields[idx-1]; if(p){p.focus(); try{p.select();}catch(e){}}},60);}}
-let activeList=null; let activeIndex=0; let currentInput=null;
-function closeList(){if(activeList){activeList.remove(); activeList=null; activeIndex=0; currentInput=null;}}
-function highlightActive(){if(!activeList) return; Array.from(activeList.children).forEach((ch,i)=>{ch.style.background=i===activeIndex?'#1976d2':'white'; ch.style.color=i===activeIndex?'white':'black';});}
-function createList(input,items){closeList(); if(!items.length)return; currentInput=input; activeIndex=0; const rect=input.getBoundingClientRect(); const div=doc.createElement('div'); div.style.position='fixed'; div.style.left=rect.left+'px'; div.style.top=(rect.bottom+2)+'px'; div.style.width=rect.width+'px'; div.style.maxHeight='220px'; div.style.overflowY='auto'; div.style.background='white'; div.style.border='1px solid #ccc'; div.style.borderRadius='6px'; div.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)'; div.style.zIndex='9999999999'; items.forEach((txt,i)=>{const item=doc.createElement('div'); item.textContent=txt; item.style.padding='12px'; item.style.cursor='pointer'; item.style.background=i===0?'#1976d2':'white'; item.style.color=i===0?'white':'black'; item.style.fontWeight='bold'; item.style.borderBottom='1px solid #eee'; item.addEventListener('mousedown',(e)=>{e.preventDefault(); e.stopPropagation(); setNativeValue(input,txt); closeList(); moveToNext(input);}); div.appendChild(item);}); doc.body.appendChild(div); activeList=div;}
-doc.addEventListener('input',function(e){const input=e.target; if(!input||input.tagName!=='INPUT')return; if(isSearchField(input)) return; const type=getFieldType(input); if(type!=='AGENT'&&type!=='HOTEL'&&type!=='AIRLINE'&&type!=='TRANSPORT') return; const val=input.value.trim().toUpperCase(); if(val.length<1||val==="0"){closeList(); return;} let list=type==='AGENT'?AGENTS:type==='HOTEL'?HOTELS:type==='AIRLINE'?AIRLINES:TRANSPORT; if(!list||!list.length) return; let filtered=list.filter(x=>x.toUpperCase().startsWith(val)).slice(0,8); if(filtered.length)createList(input,filtered); else closeList();});
-doc.addEventListener('keydown',function(e){const active=doc.activeElement; if(!active||(active.tagName!=='INPUT'&&active.tagName!=='TEXTAREA')) return; if(isSearchField(active)) return; if(isCalendarOpen()){if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter','Escape'].includes(e.key)) return;} const type=getFieldType(active); const isAgentOrHotel=(type==='AGENT'||type==='HOTEL'); if(type==='PASSENGERS'){if(e.key==='Enter'){e.preventDefault(); e.stopPropagation(); insertNewLinePassengers(active); return;} if(e.key==='ArrowDown'||e.key==='ArrowRight'){e.preventDefault(); e.stopPropagation(); closeList(); const next=findNearest(active,e.key==='ArrowDown'?'down':'right'); if(next){next.focus(); try{next.select();}catch(e){}} else {moveToNext(active);} return;} if(e.key==='ArrowUp'||e.key==='ArrowLeft'){e.preventDefault(); e.stopPropagation(); closeList(); const prev=findNearest(active,e.key==='ArrowUp'?'up':'left'); if(prev){prev.focus();} else {moveToPrev(active);} return;} if(e.key==='Escape'){closeList(); return;} return;} if(isAgentOrHotel&&activeList&&currentInput===active){if(e.key==='Enter'){e.preventDefault(); e.stopPropagation(); const chosen=activeList.children[activeIndex]?.textContent||activeList.children[0]?.textContent; if(chosen){setNativeValue(active,chosen);} closeList(); setTimeout(()=>{moveToNext(active);},100); return;} if(e.key==='ArrowDown'){if(activeList){e.preventDefault(); if(activeIndex<activeList.children.length-1){activeIndex++; highlightActive();} return;}} if(e.key==='ArrowUp'){if(activeList){e.preventDefault(); if(activeIndex>0){activeIndex--; highlightActive();} return;}} if(e.key==='Escape'){closeList(); return;}} if(e.key==='Enter'){e.preventDefault(); closeList(); moveToNext(active); return;} if(e.key==='ArrowRight'){e.preventDefault(); closeList(); const t=findNearest(active,'right'); if(t){t.focus(); try{t.select();}catch(e){}} else {moveToNext(active);} return;} if(e.key==='ArrowLeft'){e.preventDefault(); closeList(); const t=findNearest(active,'left'); if(t){t.focus(); try{t.select();}catch(e){}} else {moveToPrev(active);} return;} if(e.key==='ArrowDown'){e.preventDefault(); closeList(); const t=findNearest(active,'down'); if(t){t.focus(); try{t.select();}catch(e){}} else {moveToNext(active);} return;} if(e.key==='ArrowUp'){e.preventDefault(); closeList(); const t=findNearest(active,'up'); if(t){t.focus(); try{t.select();}catch(e){}} else {moveToPrev(active);} return;}},true);
-doc.addEventListener('click',(e)=>{if(activeList&&!activeList.contains(e.target)&&e.target!==currentInput)closeList();});
-</script>
-"""
-js_code = js_template.replace("__AGENTS__", json.dumps(agents_for_js)).replace("__HOTELS__", json.dumps(hotels_for_js)).replace("__AIRLINES__", json.dumps(airlines_for_js)).replace("__TRANSPORT__", json.dumps(transport_for_js))
-components.html(js_code, height=0)
-
 @st.dialog("Edit Booking")
 def edit_dialog(row):
     import streamlit.components.v1 as components
