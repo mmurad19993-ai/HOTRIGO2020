@@ -124,25 +124,62 @@ def load_data():
         print(f"Load error: {e}")
         return []
 
+from google.oauth2.service_account import Credentials
+
 def get_sheet_client():
     try:
         if "gdrive" not in st.secrets:
             print("gdrive missing in secrets")
             return None
         creds_dict = dict(st.secrets["gdrive"])
-        # شيل الـ folder_id مشان ما يخرب
+        # شيل الـ folder_id
         creds_dict.pop("FOLDER_ID", None)
         creds_dict.pop("folder_id", None)
         creds_dict.pop("FOLDER_ID ", None)
         
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(
-            creds_dict,
-            ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
-        )
+        # تصليح \n بالـ private_key
+        if "private_key" in creds_dict:
+            creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+        
+        scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         client = gspread.authorize(creds)
+        print("✅ Sheet client connected")
         return client
     except Exception as e:
-        print(f"Client error: {e}")
+        print(f"❌ Client error: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def get_gspread_sheet(worksheet_name="reservations"):
+    try:
+        client = get_sheet_client()
+        if not client:
+            print("get_sheet_client returned None")
+            return None
+        spreadsheet = client.open(SHEET_NAME)
+        try:
+            sheet = spreadsheet.worksheet(worksheet_name)
+        except:
+            if worksheet_name == "reservations":
+                sheet = spreadsheet.sheet1
+            else:
+                print(f"Worksheet {worksheet_name} not found")
+                return None
+        return sheet
+    except Exception as e:
+        print(f"❌ Sheet Error {worksheet_name}: {e}")
+        return None
+
+def get_spreadsheet():
+    client = get_sheet_client()
+    if not client:
+        return None
+    try:
+        return client.open(SHEET_NAME)
+    except Exception as e:
+        print(f"Spreadsheet open error: {e}")
         return None
 
 def get_gspread_sheet(worksheet_name="reservations"):
