@@ -1839,22 +1839,76 @@ with left_side:
         # === تحت : Statement for AHMAD ===
         st.markdown(f"#### Statement for {pay_agent}")
         conn=sqlite3.connect(DB)
-        df_pays=pd.read_sql("SELECT pay_date as Date, amount as Amount, note as Note FROM agent_payments WHERE agent=? ORDER BY pay_date DESC", conn, params=(pay_agent,))
-        df_books=pd.read_sql("SELECT * FROM bookings WHERE company=?", conn, params=(pay_agent,))
+        
+        # 1. انشئ الجداول اذا مو موجودة مشان ما يضرب
+        conn.execute("""CREATE TABLE IF NOT EXISTS agent_payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent TEXT,
+            pay_date TEXT,
+            amount REAL,
+            note TEXT
+        )""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS bookings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company TEXT,
+            sell_price REAL,
+            sale_date TEXT
+        )""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS reservations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent TEXT,
+            sell_price REAL
+        )""")
+        conn.commit()
+
+        # 2. اقرأ الدفعات بأمان
+        try:
+            df_pays=pd.read_sql("SELECT pay_date as Date, amount as Amount, note as Note FROM agent_payments WHERE agent=? ORDER BY pay_date DESC", conn, params=(pay_agent,))
+        except Exception as e:
+            print(f"pays error: {e}")
+            df_pays=pd.DataFrame()
+
+        # 3. اقرأ الحجوزات - جرب bookings واذا فاضي جرب reservations
+        try:
+            df_books=pd.read_sql("SELECT * FROM bookings WHERE company=?", conn, params=(pay_agent,))
+            if df_books.empty:
+                # جرب reservations اذا bookings فاضي
+                df_books=pd.read_sql("SELECT * FROM reservations WHERE agent=?", conn, params=(pay_agent,))
+        except:
+            try:
+                df_books=pd.read_sql("SELECT * FROM reservations WHERE agent=?", conn, params=(pay_agent,))
+            except:
+                df_books=pd.DataFrame()
+        
         conn.close()
+
         if not df_books.empty:
+            total_sell_r = 0
             for c in df_books.columns:
                 if 'sell' in c.lower() or 'price' in c.lower():
-                    total_sell_r = df_books[c].apply(to_f_local).sum(); break
-            else: total_sell_r=0
-        else: total_sell_r=0
+                    try:
+                        total_sell_r = df_books[c].apply(to_f_local).sum()
+                        break
+                    except:
+                        try:
+                            total_sell_r = pd.to_numeric(df_books[c], errors='coerce').sum()
+                            break
+                        except:
+                            continue
+        else: 
+            total_sell_r=0
+            
         total_paid_r = df_pays['Amount'].sum() if not df_pays.empty else 0
+        
         c1,c2,c3 = st.columns(3)
         c1.metric("Total Sales", f"${total_sell_r:.2f}")
         c2.metric("Total Paid", f"${total_paid_r:.2f}")
         c3.metric("Balance", f"${total_sell_r - total_paid_r:.2f}")
+        
         if not df_pays.empty:
             st.dataframe(df_pays, use_container_width=True, hide_index=True)
+        else:
+            st.info("No payments found for this agent")
 with t3:
     conn = sqlite3.connect(DB)
     conn.execute("CREATE TABLE IF NOT EXISTS agents (name TEXT PRIMARY KEY)")
