@@ -149,18 +149,47 @@ SHEET_HEADER = ["ID","Agent","Passengers","Passengers Count","Hotel","Rooms","Ro
 
 def booking_to_sheet_row(b):
     try:
-        import sqlite3
         from datetime import datetime
-        if isinstance(b, (list, tuple)):
-            conn = sqlite3.connect(DB)
-            conn.row_factory = sqlite3.Row
-            r = conn.execute("SELECT * FROM bookings WHERE id=?", (int(b[0]),)).fetchone()
-            conn.close()
-            if not r: return None
-            d = dict(r)
-        else:
-            try: d = dict(b)
-            except: d = {k: b[k] for k in b.keys()}
+        
+        # ما عاد في sqlite - ناخد الداتا مباشر من الـ dict
+        try: 
+            d = dict(b)
+        except: 
+            d = {k: b[k] for k in b.keys()}
+
+        def gv(k, default=""):
+            v = d.get(k, default)
+            return "" if v is None else v
+
+        def to_f(v):
+            try: 
+                return float(str(v).replace(",", "").strip() or 0)
+            except: 
+                return 0.0
+
+        nights = 0
+        try:
+            en = datetime.strptime(str(gv("entry_date"))[:10], "%Y-%m-%d")
+            ex = datetime.strptime(str(gv("exit_date"))[:10], "%Y-%m-%d")
+            nights = max(0, (ex - en).days)
+        except:
+            pass
+
+        # رجع الصف بنفس ترتيب الهيدر تماما
+        row = []
+        for h in SHEET_HEADER:
+            if h == "Nights" or h == "Night":
+                row.append(nights)
+            else:
+                # نحاول نجيب القيمة - نجرب الاسم متل ما هو و small case
+                val = d.get(h, d.get(h.lower(), d.get(h.replace(" ", "_").lower(), "")))
+                row.append(val)
+        
+        return row
+
+    except Exception as e:
+        print(f"booking_to_sheet_row error: {e}")
+        return None
 
         def gv(k, default=""):
             v = d.get(k, default)
@@ -225,72 +254,62 @@ def booking_to_sheet_row(b):
         print(f"booking_to_sheet_row error {e} for {b}")
         return None
 
-def sync_booking_to_sheet(booking_id):
+def sync_booking_to_sheet(booking_data):
     try:
         sheet = get_gspread_sheet()
-        if not sheet: return False
-        conn=sqlite3.connect(DB)
-        conn.row_factory = sqlite3.Row
-        b=conn.execute("SELECT * FROM bookings WHERE id=?", (int(booking_id),)).fetchone()
-        conn.close()
-        if not b: return False
+        if not sheet: 
+            return False
+        
+        # اذا بعتت dict بياخدو مباشر، اذا بعتت id قديم ما عاد يشتغل
+        # لازم تبعت الـ dict تبع الحجز
+        if isinstance(booking_data, dict):
+            b = booking_data
+            booking_id = str(b.get("id", b.get("ID", "")))
+        else:
+            # للتوافق القديم - بس ما رح يلاقي شي لانو لغينا اللوكال
+            print(f"Please pass dict not ID: {booking_data}")
+            return False
+
         row = booking_to_sheet_row(b)
-        if not row: return False
+        if not row: 
+            return False
+
         try:
-            cell = sheet.find(str(booking_id))
+            # حاول تلاقي الـ ID بالشيت وتعمل update
+            cell = sheet.find(booking_id)
             sheet.update(f"A{cell.row}:AA{cell.row}", [row])
             print(f"✅ Updated ID {booking_id}")
         except:
+            # اذا مو موجود اعمل append جديد
             sheet.append_row(row, value_input_option='USER_ENTERED')
             print(f"✅ Appended ID {booking_id}")
+        
         return True
+        
     except Exception as e:
-        print(f"Sync failed {booking_id}: {e}")
+        print(f"Sync failed {booking_data}: {e}")
         return False
 def sync_all_to_sheet():
-    try:
-        sheet = get_gspread_sheet()
-        if not sheet:
-            return False
-        conn = sqlite3.connect(DB)
-        all_b = conn.execute("SELECT * FROM bookings ORDER BY id").fetchall()
-        conn.close()
+    """Disabled - هاد الفنكشن كان يمسح الشيت كلو بـ clear() لهيك لغيناه"""
+    print("sync_all_to_sheet is disabled - all data now lives on Google Sheet directly")
+    return True
 
-        print(f"DEBUG: Found {len(all_b)} bookings in DB")
-
-        rows = [SHEET_HEADER]
-        for b in all_b:
-            r = booking_to_sheet_row(b)
-            print(f"DEBUG booking {b[0]} -> row: {r}")
-            if r:
-                rows.append(r)
-
-        print(f"DEBUG: Final rows to sync: {len(rows)-1}")
-
-        if len(rows) <= 1:
-            print("No bookings to sync - booking_to_sheet_row returns None!")
-            return False
-
-        sheet.clear()
-        sheet.update('A1', rows) # بدون range_name
-        print(f"✅ Synced all {len(rows)-1} bookings to sheet")
-        return True
-    except Exception as e:
-        print(f"Sync all failed {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+# --- PDF Imports - طريقة آمنة بدون os.system ---
 try:
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.pdfgen import canvas
-except:
-    os.system("pip install reportlab")
-    from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.pdfgen import canvas
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
+    # لا تستخدم os.system داخل Streamlit - بيعمل مشاكل
+    print("reportlab not installed, add it to requirements.txt")
 
-DB = os.path.join(os.path.dirname(__file__), "hotrigo.db")
+# --- تم الغاء قاعدة البيانات المحلية ---
+# DB = os.path.join(os.path.dirname(__file__), "hotrigo.db")  <- ملغي، ما عاد نحتاجو
+# كل الحفظ صار مباشر على Google Sheet
+
 LOGO_PATH = os.path.join(os.path.dirname(__file__), "logo.png")
-
+# اذا اللوغو مو موجود على GitHub رح يطلع تحذير بس ما رح يوقف البرنامج
 def get_logo_b64():
     if os.path.exists(LOGO_PATH):
         try:
