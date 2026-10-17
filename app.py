@@ -1255,6 +1255,7 @@ def agent_statement_dialog(agent_name):
 
 st.markdown("## ✈️ hotrigo | Sheets Sync ✅")
 t1,t2,t3=st.tabs(["Sales", "Account Statement", "Agents & Hotels"])
+
 with t1:
     l,r=st.columns([1, 4.8])
     with l:
@@ -1267,10 +1268,7 @@ with t1:
         except:
             pax_num = 1
         pax_num = max(1, pax_num)
-
         passenger_list = []
-
-        # للكروبات الكبيرة - تحميل اكسل
         if pax_num > 20:
             st.warning(f"Group of {pax_num} detected - Please upload Excel")
             up_file = st.file_uploader("Upload Passenger List Excel", type=["xlsx","xls","csv"], key="up_pas")
@@ -1281,29 +1279,18 @@ with t1:
                         df = pd.read_csv(up_file)
                     else:
                         df = pd.read_excel(up_file)
-                    # ناخد اول عمود فيه الاسماء
                     col = df.columns[0]
                     passenger_list = df[col].astype(str).tolist()
                     st.success(f"Loaded {len(passenger_list)} names from Excel")
-                    for n in passenger_list[:5]:
-                        st.caption(f"- {n}")
-                    if len(passenger_list) > 5:
-                        st.caption(f"... and {len(passenger_list)-5} more")
                 except Exception as e:
                     st.error(f"Error reading file: {e}")
-            else:
-                st.info("Excel should have one column with passenger names")
-                passenger_list = []
         else:
-            # للعدد القليل - خانات عادية
             pax_num = min(pax_num, 20)
             for i in range(pax_num):
                 name = st.text_input(f"Passenger {i+1} *", key=f"pas_{i}", placeholder=f"Name {i+1}")
                 passenger_list.append(name)
 
         pas = "\n".join([n for n in passenger_list if str(n).strip()!=""])
-        
-        
         room_type=st.text_input("Room Type *", key="room_type", placeholder="SNG - DBL - TRP")
         room_count=st.text_input("Number of Rooms", value="", key="room_count", placeholder="")
         hotel=st.text_input("Hotel *", key="hotel", placeholder="")
@@ -1313,28 +1300,22 @@ with t1:
         except: nights_val=0
         xd=ed+timedelta(days=nights_val)
         st.caption(f"Check-out: {xd}")
-
         c_price, c_flight = st.columns(2)
         with c_price: pn_s=st.text_input("Price per Night $", key="pn")
         with c_flight: fl_s=st.text_input("Flight $", key="fl")
-
         c_trans, c_sell = st.columns(2)
         with c_trans: tr_s=st.text_input("Transport $", key="tr")
         with c_sell: sell_s=st.text_input("Selling Price $ *", key="sell")
-
         pn=to_f(pn_s); fl=to_f(fl_s); tr=to_f(tr_s); sell=to_f(sell_s)
-
         try: room_count_val=int(room_count) if room_count.strip()!="" else 0
         except: room_count_val=0
         rc_for_calc = room_count_val if room_count_val > 0 else 1
         cost_total = (pn * nights_val * rc_for_calc) + fl + tr
         if cost_total > 0:
             st.caption(f"💰 الكوست صار علينا: ${cost_total:,.2f}")
-
         notes=st.text_input("Note", key="notes")
         airline=st.text_input("Airline (empty=no flight)", key="airline", placeholder="")
         vno=st.text_input("Voucher No", key="vno")
-
         with st.expander("➕ Show More", expanded=False):
             c_dep, c_ret=st.columns(2)
             with c_dep: dep_time=st.text_input("Departure Time", key="dep_time", placeholder="10:30")
@@ -1387,6 +1368,7 @@ with t1:
                     st.session_state.do_clear=True; st.session_state.pending=None; st.rerun()
             with c2:
                 if st.button("NO", use_container_width=True): st.session_state.pending=None; st.rerun()
+
     with r:
         col_f1, col_f2, col_f3=st.columns([1.2, 1.2, 1.3])
         with col_f1: entry_date_val=st.date_input("entry_date_filter", value=None, key="entry_date_filter", label_visibility="collapsed")
@@ -1395,7 +1377,6 @@ with t1:
             c_a,c_b=st.columns(2)
             with c_a: st.button("Show All", use_container_width=True, on_click=clear_filters)
             with c_b: st.caption("✅ Sheet Live")
-
         b_filter, b_btns = st.columns([1.0, 4.0])
         with b_filter: search_mode = st.selectbox("نوع البحث", ["الكل", "مسافر فقط", "وكيل فقط", "رقم حجز"], key="search_mode")
         with b_btns:
@@ -1407,7 +1388,6 @@ with t1:
             with b5: view_btn=st.button("👁️ عرض", use_container_width=True, key="view_btn")
             with scol: search_val=st.text_input("Search", placeholder="Search...", label_visibility="collapsed", key="search")
 
-        # ===== قراءة من Google Sheet مباشر =====
         sheet = get_gspread_sheet()
         if not sheet:
             st.error("Sheet not connected")
@@ -1420,12 +1400,11 @@ with t1:
             header = all_vals[0]
             rows = all_vals[1:]
             clean_rows = []
-            for r in rows:
-                if len(r) < len(header): r = r + [""] * (len(header)-len(r))
-                clean_rows.append(r[:len(header)])
+            for r_ in rows:
+                if len(r_) < len(header): r_ = r_ + [""] * (len(header)-len(r_))
+                clean_rows.append(r_[:len(header)])
             df_raw = pd.DataFrame(clean_rows, columns=header)
             df_raw["_sheet_row"] = [i+2 for i in range(len(df_raw))]
-            
             df_filtered = df_raw.copy()
             s_raw = search_val.strip()
             if s_raw:
@@ -1441,7 +1420,6 @@ with t1:
                 df_filtered = df_filtered[df_filtered.apply(lambda row: str(entry_date_val) in str(row.values), axis=1)]
             if exit_date_val:
                 df_filtered = df_filtered[df_filtered.apply(lambda row: str(exit_date_val) in str(row.values), axis=1)]
-
             if df_filtered.empty:
                 display_df = pd.DataFrame(columns=["ID","Sale Date","Agent","Passengers","Room Type","Rooms","Hotel","Check-in","Check-out","Sell Price","Airline","Dep Time","Ret Time","Note","Employee","Transport Co"])
             else:
@@ -1475,476 +1453,136 @@ with t1:
                 except: return None
             return None
 
-        # ===== الأزرار صارت تقرا من الشيت =====
         if edit_btn:
             ids=get_selected_ids()
             if len(ids)!=1: st.error("اكبس على سطر واحد وبعدين Edit")
-            else:
-                row_idx = int(ids[0])
-                # ابعت رقم السطر للـ edit_dialog
-                edit_dialog(row_idx)
-
+            else: edit_dialog(int(ids[0]))
         if inv_btn:
             ids=get_selected_ids()
             if len(ids)!=1: st.error("اكبس على سطر واحد وبعدين Invoice")
-            else:
-                row_idx = int(ids[0])
-                invoice_dialog(row_idx)
-
+            else: invoice_dialog(int(ids[0]))
         if voucher_btn:
             ids=get_selected_ids()
             if len(ids)!=1: st.error("اكبس على سطر واحد وبعدين Voucher")
+            else: voucher_dialog(int(ids[0]))
+        if statement_btn:
+            ag = get_selected_agent()
+            if not ag: st.error("حدد سطر واحد للوكيل")
+            else: agent_statement_dialog(ag)
+        if view_btn:
+            ids = get_selected_ids()
+            if len(ids)!= 1: st.error("حدد حجز واحد من الجدول أولاً")
             else:
-                row_idx = int(ids[0])
-                voucher_dialog(row_idx)
-if statement_btn:
-    ag = get_selected_agent()
-    if not ag:
-        st.error("حدد سطر واحد للوكيل")
-    else:
-        agent_statement_dialog(ag)
+                if selected_rows and not df_raw.empty:
+                    d = dict(df_raw.iloc[selected_rows[0]])
+                    @st.dialog("Booking Details", width="small")
+                    def view_dialog():
+                        st.markdown(f"<h3 style='text-align:center; font-weight:900;'>{d.get('company','')}</h3>", unsafe_allow_html=True)
+                        st.divider()
+                        st.markdown(f"**Passengers:**\n{d.get('passengers','')}")
+                        st.markdown(f"**Hotel:** {d.get('hotel','')}")
+                        st.markdown(f"**Check-in:** {d.get('entry_date','')} | **Check-out:** {d.get('exit_date','')}")
+                        st.markdown(f"**Sell:** ${d.get('sell','')} | **Note:** {d.get('notes','')}")
+                    view_dialog()
 
-if view_btn:
-    ids = get_selected_ids()
-    if len(ids)!= 1:
-        st.error("حدد حجز واحد من الجدول أولاً")
-    else:
-        conn = sqlite3.connect(DB)
-        conn.row_factory = sqlite3.Row
-        row = conn.execute("SELECT * FROM bookings WHERE id=?", (int(ids[0]),)).fetchone()
-        conn.close()
-        if row:
-            @st.dialog("Booking Details", width="small")
-            def view_dialog():
-                d = dict(row)
-                st.markdown(f"<h3 style='text-align:center; font-weight:900; margin:0;'>{d.get('company','')}</h3>", unsafe_allow_html=True)
-                st.divider()
-                
-                st.markdown("""
-                <style>
-                .pax-box {
-                    max-height:150px; 
-                    overflow-y:auto; 
-                    border:1px solid #ddd; 
-                    border-radius:6px; 
-                    padding:6px 8px; 
-                    background:#f9f9f9; 
-                    font-size:16px; 
-                    font-weight:900; 
-                    white-space:pre-line;
-                    margin-top:0;
-                }
-                </style>
-                """, unsafe_allow_html=True)
-                pax = f"<div class='pax-box'>{d.get('passengers','')}</div>"
-                notes_val = (d.get('notes','') or d.get('note','') or '').strip()
-
-                # --- فوق ---
-                st.markdown("<p style='font-weight:900; font-size:15px; margin:0 0 2px 0;'>Passengers:</p>", unsafe_allow_html=True)
-                st.markdown(pax, unsafe_allow_html=True)
-                st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-                st.markdown(f"<p style='font-weight:900; font-size:15px; margin:0;'>Hotel: {d.get('hotel','')}</p>", unsafe_allow_html=True)
-                st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-                st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Check-in: {d.get('entry_date','')}</p>", unsafe_allow_html=True)
-                st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Departure: {d.get('flight_dep_time','')} {d.get('dep_airport','')}</p>", unsafe_allow_html=True)
-                st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Flight No: {d.get('flight_no_dep','')}</p>", unsafe_allow_html=True)
-                st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Note: {notes_val}</p>", unsafe_allow_html=True)
-                
-                st.markdown("<div style='height:50px;'></div>", unsafe_allow_html=True)
-                st.divider()
-                
-                # --- تحت ---
-                st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Hotel: {d.get('hotel','')}</p>", unsafe_allow_html=True)
-                st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-                st.markdown("<p style='font-weight:900; font-size:15px; margin:0 0 2px 0;'>Passengers:</p>", unsafe_allow_html=True)
-                st.markdown(pax, unsafe_allow_html=True)
-                st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-                st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Check-out: {d.get('exit_date','')}</p>", unsafe_allow_html=True)
-                st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Return: {d.get('flight_ret_time','')} {d.get('ret_airport','')}</p>", unsafe_allow_html=True)
-                st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Flight No: {d.get('flight_no_ret','')}</p>", unsafe_allow_html=True)
-                st.markdown(f"<p style='font-weight:900; font-size:15px; margin:2px 0;'>Note: {notes_val}</p>", unsafe_allow_html=True)
-
-            view_dialog()
 with t2:
-    st.divider()
-
+    st.markdown("### 💰 Account Statement - Google Sheets")
     def to_f_local(x):
         try: return float(str(x).replace('$','').replace(',','').strip() or 0)
         except: return 0
 
-    def first_traveler_only(text):
-        if not text: return ""
-        t=str(text).strip()
-        for sep in [",", "\n", "/", ";", "|", " - "]:
-            if sep in t: t=t.split(sep)[0]; break
-        return t.strip()[:25]
+    def generate_pdf_bytes(pay_agent):
+        from fpdf import FPDF
+        from io import BytesIO
+        ws_res = get_gspread_sheet("reservations")
+        ws_pay = get_gspread_sheet("Payments")
+        df_book = pd.DataFrame(ws_res.get_all_records()) if ws_res else pd.DataFrame()
+        df_pay = pd.DataFrame(ws_pay.get_all_records()) if ws_pay else pd.DataFrame()
+        if not df_book.empty and 'company' in df_book.columns: df_book = df_book[df_book['company']==pay_agent]
+        if not df_pay.empty and 'Agent Name' in df_pay.columns: df_pay = df_pay[df_pay['Agent Name']==pay_agent]
+        if df_book.empty and df_pay.empty: return None
+        total_sell = pd.to_numeric(df_book['sell'], errors='coerce').sum() if 'sell' in df_book.columns else 0
+        total_paid = pd.to_numeric(df_pay['Amount'], errors='coerce').sum() if 'Amount' in df_pay.columns else 0
+        pdf=FPDF(orientation='L'); pdf.add_page()
+        pdf.set_font("Arial","B",14); pdf.cell(0,10,f"Statement - {pay_agent} | Sales ${total_sell:.2f} | Paid ${total_paid:.2f} | Balance ${total_sell-total_paid:.2f}",ln=True,align='C')
+        buf=BytesIO(); pdf.output(buf); return buf.getvalue()
 
-    def get_col(df, *keys):
-        for k in keys:
-            for c in df.columns:
-                if k.lower() in c.lower(): return c
-        return None
+    def generate_excel_bytes(pay_agent):
+        from io import BytesIO
+        ws_res = get_gspread_sheet("reservations")
+        ws_pay = get_gspread_sheet("Payments")
+        df1 = pd.DataFrame(ws_res.get_all_records()) if ws_res else pd.DataFrame()
+        df2 = pd.DataFrame(ws_pay.get_all_records()) if ws_pay else pd.DataFrame()
+        if not df1.empty and 'company' in df1.columns: df1 = df1[df1['company']==pay_agent]
+        if not df2.empty and 'Agent Name' in df2.columns: df2 = df2[df2['Agent Name']==pay_agent]
+        output=BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            (df1 if not df1.empty else pd.DataFrame([{'Note':'No bookings'}])).to_excel(writer, sheet_name='Bookings', index=False)
+            (df2 if not df2.empty else pd.DataFrame([{'Note':'No payments'}])).to_excel(writer, sheet_name='Payments', index=False)
+        output.seek(0); return output.getvalue()
 
-def generate_pdf_bytes(pay_agent):
-    from fpdf import FPDF
-    from io import BytesIO
-    from datetime import datetime
-    conn = sqlite3.connect(DB)
-    df_pays_pdf = pd.read_sql("SELECT pay_date,amount,note FROM agent_payments WHERE agent=? ORDER BY pay_date", conn, params=(pay_agent,))
-    total_paid_pdf = df_pays_pdf['amount'].sum() if not df_pays_pdf.empty else 0
-    df_raw_for_pdf = pd.read_sql("SELECT * FROM bookings WHERE company=?", conn, params=(pay_agent,))
-    conn.close()
-    if df_raw_for_pdf.empty:
-        return None
-    sell_c = None
-    for c in df_raw_for_pdf.columns:
-        if 'sell' in c.lower() or 'price' in c.lower():
-            sell_c = c
-            break
-    total_sell = df_raw_for_pdf[sell_c].apply(to_f_local).sum() if sell_c else 0
-    col_traveler = get_col(df_raw_for_pdf, 'traveler', 'guest', 'passenger', 'pax_name', 'names')
-    col_pax = get_col(df_raw_for_pdf, 'pax', 'persons', 'people', 'adult')
-    col_hotel = get_col(df_raw_for_pdf, 'hotel')
-    col_room_type = get_col(df_raw_for_pdf, 'room_type', 'room')
-    col_room_count = get_col(df_raw_for_pdf, 'room_count', 'rooms')
-    col_checkin = get_col(df_raw_for_pdf, 'checkin', 'check_in', 'arrival')
-    col_nights = get_col(df_raw_for_pdf, 'nights', 'night')
-    col_checkout = get_col(df_raw_for_pdf, 'checkout', 'check_out', 'departure')
-    col_note = get_col(df_raw_for_pdf, 'note', 'remark')
-
-    class PDF(FPDF):
-        def header(self):
-            self.set_font("Arial", "B", 26)
-            self.set_text_color(13, 71, 161)
-            self.cell(0, 14, "HOTRIGO", ln=True, align='C')
-            self.ln(2)
-            self.set_draw_color(13, 71, 161)
-            self.set_line_width(0.8)
-            self.line(10, self.get_y(), 287, self.get_y())
-            self.ln(6)
-        def footer(self):
-            self.set_y(-15)
-            self.set_font("Arial", "I", 7)
-            self.set_text_color(150, 150, 150)
-            self.cell(0, 10, f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')} | HOTRIGO - {pay_agent}", align='C')
-
-    pdf = PDF(orientation='L', unit='mm', format='A4')
-    pdf.set_auto_page_break(auto=True, margin=20)
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, f"Agent Statement - {pay_agent}", ln=True, align='C')
-    pdf.ln(4)
-    pdf.set_font("Arial", "B", 9)
-    pdf.set_fill_color(13, 71, 161)
-    pdf.set_text_color(255, 255, 255)
-    pdf.cell(0, 10, f"Total Sales: ${total_sell:.2f} | Paid: ${total_paid_pdf:.2f} | Balance: ${total_sell-total_paid_pdf:.2f}", border=1, align='C', fill=True)
-    pdf.ln(12)
-    pdf.set_font("Arial", "B", 11)
-    pdf.set_text_color(13, 71, 161)
-    pdf.cell(0, 8, f"Bookings - {pay_agent}", ln=True)
-    pdf.ln(2)
-    headers = ["ID", "Agent", "Traveler", "Pax", "Hotel", "Room Type", "Rooms", "Check-in", "Nights", "Check-out", "Sale Price", "Note"]
-    widths = [12, 18, 24, 9, 28, 20, 10, 18, 10, 18, 18, 92]
-    pdf.set_font("Arial", "B", 7)
-    pdf.set_fill_color(13, 71, 161)
-    pdf.set_text_color(255, 255, 255)
-    for h, w in zip(headers, widths):
-        pdf.cell(w, 8, h, border=1, align='C', fill=True)
-    pdf.ln()
-    pdf.set_font("Arial", "", 6.5)
-    pdf.set_text_color(0, 0, 0)
-    for _, row in df_raw_for_pdf.iterrows():
-        if pdf.get_y() > 175:
-            pdf.add_page()
-        vals = [str(row.get('id',"")), str(pay_agent)[:12], first_traveler_only(row.get(col_traveler,"") if col_traveler else ""), str(row.get(col_pax,"") if col_pax else ""), str(row.get(col_hotel,"") if col_hotel else "")[:18], str(row.get(col_room_type,"") if col_room_type else "")[:12], str(row.get(col_room_count,"") if col_room_count else ""), str(row.get(col_checkin,"") if col_checkin else "")[:10], str(row.get(col_nights,"") if col_nights else ""), str(row.get(col_checkout,"") if col_checkout else "")[:10], f"${to_f_local(row.get(sell_c,0)):.0f}" if sell_c else "", str(row.get(col_note,"") if col_note else "")[:50]]
-        for v, w in zip(vals, widths):
-            pdf.cell(w, 7, v, border=1, align='C')
-        pdf.ln()
-    pdf.ln(8)
-    if not df_pays_pdf.empty:
-        if pdf.get_y() > 160:
-            pdf.add_page()
-        pdf.set_font("Arial", "B", 11)
-        pdf.set_text_color(13, 71, 161)
-        pdf.cell(0, 8, f"Payment History - {pay_agent}", ln=True)
-        pdf.ln(1)
-        pdf.set_font("Arial", "B", 8)
-        pdf.set_fill_color(0, 150, 64)
-        pdf.set_text_color(255, 255, 255)
-        pdf.cell(40, 9, "Date", border=1, align='C', fill=True)
-        pdf.cell(30, 9, "Amount", border=1, align='C', fill=True)
-        pdf.cell(207, 9, "Note", border=1, align='C', fill=True)
-        pdf.ln()
-        pdf.set_font("Arial", "", 8)
-        pdf.set_text_color(0, 0, 0)
-        for _, prow in df_pays_pdf.iterrows():
-            if pdf.get_y() > 180:
-                pdf.add_page()
-            pdf.cell(40, 8, str(prow['pay_date']), border=1, align='C')
-            pdf.cell(30, 8, f"${float(prow['amount']):.2f}", border=1, align='C')
-            pdf.cell(207, 8, str(prow['note'])[:95], border=1, align='L')
-            pdf.ln()
-    buf = BytesIO()
-    pdf.output(buf)
-    return buf.getvalue()
-
-def generate_excel_bytes(pay_agent):
-    from io import BytesIO
-    from datetime import datetime
-    import pandas as pd
-    import sqlite3
-
-    conn = sqlite3.connect(DB)
-    df1 = pd.read_sql("SELECT * FROM bookings WHERE company=?", conn, params=(pay_agent,))
-    df2 = pd.read_sql("SELECT * FROM agent_payments WHERE agent=?", conn, params=(pay_agent,))
-    conn.close()
-
-    def _parse_date(d):
-        if not d or pd.isna(d):
-            return None
-        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d"):
-            try:
-                return datetime.strptime(str(d).strip(), fmt)
-            except:
-                pass
-        return None
-
-    def _first_pax(pas):
-        if not pas or pd.isna(pas):
-            return ""
-        s = str(pas).replace('\r', '\n').strip()
-        lines = [x.strip() for x in s.split('\n') if x.strip()]
-        return lines[0].split(',')[0].strip() if lines else ""
-
-    def _count_pax(pas):
-        if not pas or pd.isna(pas):
-            return 0
-        s = str(pas).replace('\r', '\n').strip()
-        lines = [x.strip() for x in s.split('\n') if x.strip()]
-        if len(lines) > 1:
-            return len(lines)
-        if ',' in s:
-            return len([x for x in s.split(',') if x.strip()])
-        return 1 if s else 0
-
-    data = []
-    for _, r in df1.iterrows():
-        ent = _parse_date(r.get('entry_date'))
-        ex = _parse_date(r.get('exit_date'))
-        nights = (ex - ent).days if ent and ex else ""
-        data.append({
-            'Booking ID': r.get('id', ''),
-            'Agent Name': r.get('company', pay_agent),
-            'First Passenger': _first_pax(r.get('passengers', '')),
-            'Pax Count': _count_pax(r.get('passengers', '')),
-            'Hotel': r.get('hotel', ''),
-            'Room Type': r.get('room_type', ''),
-            'Room Count': r.get('room_count', ''),
-            'Check-in': r.get('entry_date', ''),
-            'Nights': nights,
-            'Check-out': r.get('exit_date', ''),
-            'Sell Price': r.get('sell', ''),
-            'Notes': r.get('notes', ''),
-        })
-
-    book_export = pd.DataFrame(data) if data else pd.DataFrame([{'Note': 'No bookings'}])
-
-    if not df2.empty:
-        cols = [c for c in ['pay_date', 'amount', 'note'] if c in df2.columns]
-        pay_export = df2[cols].copy()
-        pay_export.rename(columns={'pay_date': 'Payment Date', 'amount': 'Amount', 'note': 'Payment Note'}, inplace=True)
-    else:
-        pay_export = pd.DataFrame([{'Note': 'No payments'}])
-
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        book_export.to_excel(writer, sheet_name='Bookings', index=False)
-        pay_export.to_excel(writer, sheet_name='Payments', index=False)
-    output.seek(0)
-    return output.getvalue()
-
-# --- Payments from Google Sheet - DB Removed ---
-agents_list = agents_for_js
-
-left_side, right_side = st.columns([1, 1], gap="large")
-
-with left_side:
-    narrow, gap = st.columns([0.40, 0.60])
-    with narrow:
-        st.markdown("#### Add New Payment")
-        pay_agent = st.selectbox("Agent Name", agents_list, key="pay_agent_main")
-        pay_date = st.date_input("Payment Date", datetime.now(), key="pay_date_main")
-        pay_amount = st.text_input("Payment Amount $", key="pay_amount_main", placeholder="$ Amount")
-        pay_statement = st.text_input("Statement", key="pay_statement_main", placeholder="e.g. Hotel booking payment...")
-        pay_note = st.text_input("Note", key="pay_note_main", placeholder="Bank - Cash...")
-
-        if st.button("Add Payment", use_container_width=True, type="primary", key="btn_add_pay_main"):
-            amt = to_f_local(pay_amount)
-            if amt <= 0:
-                st.error("Please enter valid amount")
-            else:
-                try:
-                    _sheet = get_gspread_sheet()
-                    spreadsheet = _sheet.spreadsheet
-                    try:
-                        pay_ws = spreadsheet.worksheet("Payments")
-                    except:
-                        pay_ws = spreadsheet.add_worksheet(title="Payments", rows=2000, cols=10)
-                        pay_ws.append_row(
-                            ["Pay Date", "Agent Name", "Amount", "Statement", "Note", "Created At"],
-                            value_input_option="USER_ENTERED"
-                        )
-
-                    pay_ws.append_row(
-                        [
-                            str(pay_date),
-                            pay_agent,
-                            amt,
-                            pay_statement,
-                            pay_note,
-                            str(datetime.now())
-                        ],
-                        value_input_option="USER_ENTERED"
-                    )
-                    
-                    st.success(f"Payment ${amt} added for {pay_agent}")
-                    st.cache_data.clear()
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error: {e}")
-
-        try:
-            pdf_bytes = generate_pdf_bytes(pay_agent)
-        except:
-            pdf_bytes = None
-
-        try:
-            excel_bytes = generate_excel_bytes(pay_agent)
-        except Exception as e:
-            print(e)
-            excel_bytes = None
-        b1, b2 = st.columns(2, gap="small")
-        with b1:
-            if pdf_bytes:
-                st.download_button("🖨️ Print PDF", data=pdf_bytes, file_name=f"HOTRIGO_{pay_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key=f"dl_pdf_one_{pay_agent}")
-            else:
-                st.button("🖨️ Print PDF", disabled=True, use_container_width=True, key=f"dis_pdf_{pay_agent}")
-        with b2:
-            if excel_bytes:
-                st.download_button("📊 Export Excel", data=excel_bytes, file_name=f"HOTRIGO_{pay_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_excel_one_{pay_agent}")
+    agents_list = agents_for_js
+    left_side, right_side = st.columns([1, 1], gap="large")
+    with left_side:
+        narrow, gap = st.columns([0.40, 0.60])
+        with narrow:
+            st.markdown("#### Add New Payment")
+            pay_agent = st.selectbox("Agent Name", agents_list, key="pay_agent_main")
+            pay_date = st.date_input("Payment Date", datetime.now(), key="pay_date_main")
+            pay_amount = st.text_input("Payment Amount $", key="pay_amount_main", placeholder="$ Amount")
+            pay_statement = st.text_input("Statement", key="pay_statement_main", placeholder="e.g. Hotel booking payment...")
+            pay_note = st.text_input("Note", key="pay_note_main", placeholder="Bank - Cash...")
+            if st.button("Add Payment", use_container_width=True, type="primary", key="btn_add_pay_main"):
+                amt = to_f_local(pay_amount)
+                if amt <= 0: st.error("Please enter valid amount")
+                else:
+                    ok = add_payment("Payments", pay_agent, amt, pay_statement, pay_note)
+                    if ok:
+                        st.cache_data.clear(); st.rerun()
+            try: pdf_bytes = generate_pdf_bytes(pay_agent)
+            except: pdf_bytes = None
+            try: excel_bytes = generate_excel_bytes(pay_agent)
+            except: excel_bytes = None
+            b1, b2 = st.columns(2, gap="small")
+            with b1:
+                if pdf_bytes: st.download_button("🖨️ Print PDF", data=pdf_bytes, file_name=f"HOTRIGO_{pay_agent}_statement.pdf", mime="application/pdf", use_container_width=True, key=f"dl_pdf_one_{pay_agent}")
+            with b2:
+                if excel_bytes: st.download_button("📊 Export Excel", data=excel_bytes, file_name=f"HOTRIGO_{pay_agent}_statement.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_excel_one_{pay_agent}")
     with right_side:
-        # === فوق : Agents Summary ===
         st.markdown("#### 💰 Agents Summary")
         try:
-            conn=sqlite3.connect(DB)
-            df_all_bookings=pd.read_sql("SELECT * FROM bookings",conn)
-            df_all_pays=pd.read_sql("SELECT agent, SUM(amount) as total_paid FROM agent_payments GROUP BY agent",conn)
-            conn.close()
-            sell_c_all=None
-            for c in df_all_bookings.columns:
-                if 'sell' in c.lower() or 'price' in c.lower(): sell_c_all=c; break
+            ws_res = get_gspread_sheet("reservations")
+            ws_pay = get_gspread_sheet("Payments")
+            df_all_bookings = pd.DataFrame(ws_res.get_all_records()) if ws_res else pd.DataFrame()
+            df_all_pays = pd.DataFrame(ws_pay.get_all_records()) if ws_pay else pd.DataFrame()
             summary=[]
             for ag in agents_list:
-                df_ag = df_all_bookings[df_all_bookings['company']==ag] if not df_all_bookings.empty else pd.DataFrame()
-                total_sales = df_ag[sell_c_all].apply(to_f_local).sum() if not df_ag.empty and sell_c_all else 0
-                paid_row = df_all_pays[df_all_pays['agent']==ag] if not df_all_pays.empty else pd.DataFrame()
-                total_paid = float(paid_row['total_paid'].values[0]) if not paid_row.empty else 0
-                summary.append({"Agent":ag, "Sales":total_sales, "Paid":total_paid, "Balance":total_sales-total_paid})
+                sales = pd.to_numeric(df_all_bookings[df_all_bookings['company']==ag]['sell'], errors='coerce').sum() if not df_all_bookings.empty and 'company' in df_all_bookings.columns and 'sell' in df_all_bookings.columns else 0
+                paid = pd.to_numeric(df_all_pays[df_all_pays['Agent Name']==ag]['Amount'], errors='coerce').sum() if not df_all_pays.empty and 'Agent Name' in df_all_pays.columns and 'Amount' in df_all_pays.columns else 0
+                summary.append({"Agent":ag, "Sales":sales, "Paid":paid, "Balance":sales-paid})
             df_summary=pd.DataFrame(summary)
             if not df_summary.empty:
                 st.dataframe(df_summary.style.format({"Sales":"${:.2f}","Paid":"${:.2f}","Balance":"${:.2f}"}), use_container_width=True, height=250)
                 st.markdown(f"""<div style="background:#0d47a1;color:white;padding:10px;border-radius:8px;text-align:center">
                 Sales: ${df_summary['Sales'].sum():.2f} | Paid: ${df_summary['Paid'].sum():.2f} | Due: ${df_summary['Balance'].sum():.2f}
                 </div>""", unsafe_allow_html=True)
-        except Exception as e:
-            st.error(f"Summary Error: {e}")
-
+        except Exception as e: st.error(f"Summary Error: {e}")
         st.divider()
-
-        # === تحت : Statement for AHMAD ===
-        st.markdown(f"#### Statement for {pay_agent}")
-        conn=sqlite3.connect(DB)
-        
-        # 1. انشئ الجداول اذا مو موجودة مشان ما يضرب
-        conn.execute("""CREATE TABLE IF NOT EXISTS agent_payments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            agent TEXT,
-            pay_date TEXT,
-            amount REAL,
-            note TEXT
-        )""")
-        conn.execute("""CREATE TABLE IF NOT EXISTS bookings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            company TEXT,
-            sell_price REAL,
-            sale_date TEXT
-        )""")
-        conn.execute("""CREATE TABLE IF NOT EXISTS reservations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            agent TEXT,
-            sell_price REAL
-        )""")
-        conn.commit()
-
-        # 2. اقرأ الدفعات بأمان
+        st.markdown(f"#### Statement")
         try:
-            df_pays=pd.read_sql("SELECT pay_date as Date, amount as Amount, note as Note FROM agent_payments WHERE agent=? ORDER BY pay_date DESC", conn, params=(pay_agent,))
-        except Exception as e:
-            print(f"pays error: {e}")
-            df_pays=pd.DataFrame()
+            ws_pay = get_gspread_sheet("Payments")
+            df_p = pd.DataFrame(ws_pay.get_all_records()) if ws_pay else pd.DataFrame()
+            if not df_p.empty: st.dataframe(df_p, use_container_width=True, height=300)
+        except Exception as e: st.error(f"{e}")
 
-        # 3. اقرأ الحجوزات - جرب bookings واذا فاضي جرب reservations
-        try:
-            df_books=pd.read_sql("SELECT * FROM bookings WHERE company=?", conn, params=(pay_agent,))
-            if df_books.empty:
-                # جرب reservations اذا bookings فاضي
-                df_books=pd.read_sql("SELECT * FROM reservations WHERE agent=?", conn, params=(pay_agent,))
-        except:
-            try:
-                df_books=pd.read_sql("SELECT * FROM reservations WHERE agent=?", conn, params=(pay_agent,))
-            except:
-                df_books=pd.DataFrame()
-        
-        conn.close()
-
-        if not df_books.empty:
-            total_sell_r = 0
-            for c in df_books.columns:
-                if 'sell' in c.lower() or 'price' in c.lower():
-                    try:
-                        total_sell_r = df_books[c].apply(to_f_local).sum()
-                        break
-                    except:
-                        try:
-                            total_sell_r = pd.to_numeric(df_books[c], errors='coerce').sum()
-                            break
-                        except:
-                            continue
-        else: 
-            total_sell_r=0
-            
-        total_paid_r = df_pays['Amount'].sum() if not df_pays.empty else 0
-        
-        c1,c2,c3 = st.columns(3)
-        c1.metric("Total Sales", f"${total_sell_r:.2f}")
-        c2.metric("Total Paid", f"${total_paid_r:.2f}")
-        c3.metric("Balance", f"${total_sell_r - total_paid_r:.2f}")
-        
-        if not df_pays.empty:
-            st.dataframe(df_pays, use_container_width=True, hide_index=True)
-        else:
-            st.info("No payments found for this agent")
 with t3:
     conn = sqlite3.connect(DB)
     conn.execute("CREATE TABLE IF NOT EXISTS agents (name TEXT PRIMARY KEY)")
     conn.execute("CREATE TABLE IF NOT EXISTS hotels (name TEXT PRIMARY KEY)")
     conn.execute("CREATE TABLE IF NOT EXISTS airlines (name TEXT PRIMARY KEY)")
     conn.execute("CREATE TABLE IF NOT EXISTS transport_companies (name TEXT PRIMARY KEY)")
-    conn.commit()
-    conn.close()
-
+    conn.commit(); conn.close()
     c1, c2, c3, c4 = st.columns(4, gap="medium")
-
     with c1:
         with st.container(border=True):
             st.markdown("#### 👥 Agents")
@@ -1958,7 +1596,6 @@ with t3:
                     conn.close(); st.rerun()
             conn=sqlite3.connect(DB); dfa=pd.read_sql("SELECT name as Agents FROM agents ORDER BY name", conn); conn.close()
             st.dataframe(dfa, use_container_width=True, height=250, hide_index=True)
-
     with c2:
         with st.container(border=True):
             st.markdown("#### 🏨 Hotels")
@@ -1972,7 +1609,6 @@ with t3:
                     conn.close(); st.rerun()
             conn=sqlite3.connect(DB); dfh=pd.read_sql("SELECT name as Hotels FROM hotels ORDER BY name", conn); conn.close()
             st.dataframe(dfh, use_container_width=True, height=250, hide_index=True)
-
     with c3:
         with st.container(border=True):
             st.markdown("#### ✈️ Airlines")
@@ -1985,19 +1621,15 @@ with t3:
                         conn.execute("CREATE TABLE IF NOT EXISTS airlines (name TEXT PRIMARY KEY)")
                         conn.execute("INSERT INTO airlines (name) VALUES (?)", (nal.strip(),))
                         conn.commit()
-                    except Exception as e:
-                        print(f"airline insert error: {e}")
-                    conn.close()
-                    st.rerun()
+                    except: pass
+                    conn.close(); st.rerun()
             conn=sqlite3.connect(DB)
             try:
                 conn.execute("CREATE TABLE IF NOT EXISTS airlines (name TEXT PRIMARY KEY)")
                 dfal=pd.read_sql("SELECT name as Airlines FROM airlines ORDER BY name", conn)
-            except:
-                dfal=pd.DataFrame(columns=["Airlines"])
+            except: dfal=pd.DataFrame(columns=["Airlines"])
             conn.close()
             st.dataframe(dfal, width='stretch', height=250, hide_index=True)
-
     with c4:
         with st.container(border=True):
             st.markdown("#### 🚌 Transport")
