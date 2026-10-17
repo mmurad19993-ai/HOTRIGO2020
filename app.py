@@ -1569,7 +1569,7 @@ def generate_excel_bytes(pay_agent):
     output.seek(0)
     return output.getvalue()
 
-# --- Payments من الشيت مباشر - DB ملغى ---
+# --- Payments from Google Sheet - DB Removed ---
 agents_list = agents_for_js
 
 left_side, right_side = st.columns([1, 1], gap="large")
@@ -1597,23 +1597,40 @@ with left_side:
                         pay_ws = spreadsheet.worksheet("Payments")
                     except:
                         pay_ws = spreadsheet.add_worksheet(title="Payments", rows=2000, cols=10)
-                        pay_ws.append_row(["Pay Date", "Agent Name", "Amount", "Payment Method", "البيان - Statement", "ملاحظة - Note", "Created At"], value_input_option="USER_ENTERED")
+                        pay_ws.append_row(
+                            ["Pay Date", "Agent Name", "Amount", "Payment Method", "Statement - البيان", "Note - ملاحظة", "Created At"],
+                            value_input_option="USER_ENTERED"
+                        )
 
-                    pay_ws.append_row([
-                        str(pay_date),
-                        pay_agent,
-                        amt,
-                        pay_method,
-                        pay_statement,
-                        pay_note,
-                        str(datetime.now())
-                    ], value_input_option="USER_ENTERED")
+                    pay_ws.append_row(
+                        [
+                            str(pay_date),
+                            pay_agent,
+                            amt,
+                            pay_method,
+                            pay_statement,
+                            pay_note,
+                            str(datetime.now())
+                        ],
+                        value_input_option="USER_ENTERED"
+                    )
                     
                     st.success(f"✅ تمت اضافة ${amt} للوكيل {pay_agent}")
                     st.cache_data.clear()
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error: {e}")
+
+        try:
+            pdf_bytes = generate_pdf_bytes(pay_agent)
+        except:
+            pdf_bytes = None
+
+        try:
+            excel_bytes = generate_excel_bytes(pay_agent)
+        except Exception as e:
+            print(e)
+            excel_bytes = None
 
         try:
             pdf_bytes = generate_pdf_bytes(pay_agent)
