@@ -655,12 +655,31 @@ def generate_agent_statement_pdf(agent_name, bookings_df, payments_df):
 
 st.set_page_config(page_title="hotrigo", page_icon="✈️", layout="wide")
 
-conn=sqlite3.connect(DB)
-agents_for_js=[x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]
-hotels_for_js=[x[0] for x in conn.execute("SELECT name FROM hotels ORDER BY name").fetchall()]
-airlines_for_js=[x[0] for x in conn.execute("SELECT name FROM airlines ORDER BY name").fetchall()]
-transport_for_js=[x[0] for x in conn.execute("SELECT name FROM transport_companies ORDER BY name").fetchall()]
-conn.close()
+# --- DB اللوكال ملغي - تحميل القوائم من الشيت مباشر ---
+agents_for_js = []
+hotels_for_js = []
+airlines_for_js = []
+transport_for_js = []
+try:
+    _sheet_js = get_gspread_sheet()
+    if _sheet_js:
+        _all = _sheet_js.get_all_values()
+        if len(_all) > 1:
+            for _r in _all[1:]:
+                try:
+                    if len(_r) > 3 and _r[3].strip(): agents_for_js.append(_r[3].strip())
+                    if len(_r) > 6 and _r[6].strip(): hotels_for_js.append(_r[6].strip())
+                    if len(_r) > 18 and _r[18].strip(): airlines_for_js.append(_r[18].strip())
+                    if len(_r) > 22 and _r[22].strip(): transport_for_js.append(_r[22].strip())
+                except:
+                    continue
+            agents_for_js = sorted(list(set(agents_for_js)))
+            hotels_for_js = sorted(list(set(hotels_for_js)))
+            airlines_for_js = sorted(list(set(airlines_for_js)))
+            transport_for_js = sorted(list(set(transport_for_js)))
+except:
+    pass
+
 agents_upper=[a.upper() for a in agents_for_js]
 hotels_upper=[h.upper() for h in hotels_for_js]
 airlines_upper=[a.upper() for a in airlines_for_js]
