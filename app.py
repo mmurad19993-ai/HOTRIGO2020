@@ -1581,7 +1581,6 @@ with left_side:
         pay_agent = st.selectbox("Agent Name", agents_list, key="pay_agent_main")
         pay_date = st.date_input("Payment Date", datetime.now(), key="pay_date_main")
         pay_amount = st.text_input("Payment Amount $", key="pay_amount_main", placeholder="$ Amount")
-        pay_method = st.selectbox("Payment Method", ["Bank Transfer", "Cash", "USDT", "Office Pay", "Credit Card", "Other"], key="pay_method_main")
         pay_statement = st.text_input("Statement", key="pay_statement_main", placeholder="e.g. Hotel booking payment...")
         pay_note = st.text_input("Note", key="pay_note_main", placeholder="Bank - Cash...")
 
@@ -1598,7 +1597,7 @@ with left_side:
                     except:
                         pay_ws = spreadsheet.add_worksheet(title="Payments", rows=2000, cols=10)
                         pay_ws.append_row(
-                            ["Pay Date", "Agent Name", "Amount", "Payment Method", "Statement", "Note", "Created At"],
+                            ["Pay Date", "Agent Name", "Amount", "Statement", "Note", "Created At"],
                             value_input_option="USER_ENTERED"
                         )
 
@@ -1607,7 +1606,6 @@ with left_side:
                             str(pay_date),
                             pay_agent,
                             amt,
-                            pay_method,
                             pay_statement,
                             pay_note,
                             str(datetime.now())
@@ -1631,29 +1629,6 @@ with left_side:
         except Exception as e:
             print(e)
             excel_bytes = None
-
-        try:
-            pdf_bytes = generate_pdf_bytes(pay_agent)
-        except:
-            pdf_bytes = None
-
-        try:
-            excel_bytes = generate_excel_bytes(pay_agent)
-        except Exception as e:
-            print(e)
-            excel_bytes = None
-
-        try:
-            pdf_bytes = generate_pdf_bytes(pay_agent)
-        except:
-            pdf_bytes = None
-
-        try:
-            excel_bytes = generate_excel_bytes(pay_agent)
-        except Exception as e:
-            print(e)
-            excel_bytes = None
-
         b1, b2 = st.columns(2, gap="small")
         with b1:
             if pdf_bytes:
