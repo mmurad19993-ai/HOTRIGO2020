@@ -718,16 +718,38 @@ components.html(js_code, height=0)
 
 @st.dialog("Edit Booking")
 def edit_dialog(row):
-    import sqlite3
     import streamlit.components.v1 as components
-    conn = sqlite3.connect(DB)
-    conn.row_factory = sqlite3.Row
-    cur = conn.execute("SELECT * FROM bookings WHERE id=?", (row[0],))
-    d_row = cur.fetchone()
-    conn.close()
-    if not d_row:
-        st.error("Booking not found"); return
-    d = dict(d_row)
+    sheet = get_gspread_sheet()
+    if not sheet:
+        st.error("Sheet not connected")
+        return
+
+    # row هو رقم السطر بالشيت او بيانات الصف
+    try:
+        row_idx = int(row[0]) if isinstance(row, (list, tuple)) and str(row[0]).isdigit() else int(row)
+        if row_idx < 2: row_idx = 2
+    except:
+        # اذا اجا row كامل، خذ اول حجز بالشيت كحل مؤقت
+        row_idx = 2
+
+    try:
+        all_vals = sheet.get_all_values()
+        header = all_vals[0]
+        if row_idx > len(all_vals):
+            st.error("Booking not found in Sheet")
+            return
+        d_row = all_vals[row_idx-1]
+        # حول ل dict
+        d = {}
+        for i, h in enumerate(header):
+            d[h] = d_row[i] if i < len(d_row) else ""
+        # عشان الكود القديم يلي تحت يشتغل
+        d['id'] = row_idx
+        if 'company' not in d and 'Company' in d:
+            d['company'] = d['Company']
+    except Exception as e:
+        st.error(f"Booking not found: {e}")
+        return
 
     def gv(k, default=""):
         v = d.get(k, default)
