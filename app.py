@@ -1569,9 +1569,8 @@ def generate_excel_bytes(pay_agent):
     output.seek(0)
     return output.getvalue()
 
-conn = sqlite3.connect(DB)
-agents_list = [x[0] for x in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]
-conn.close()
+# --- Payments من الشيت مباشر - DB ملغى ---
+agents_list = agents_for_js
 
 left_side, right_side = st.columns([1, 1], gap="large")
 
@@ -1579,10 +1578,12 @@ with left_side:
     narrow, gap = st.columns([0.40, 0.60])
     with narrow:
         st.markdown("#### Add New Payment")
-        pay_agent = st.selectbox("Select Agent", agents_list, key="pay_agent_main")
-        pay_date = st.date_input("Payment Date", datetime.now(), key="pay_date_main")
-        pay_amount = st.text_input("Amount $", key="pay_amount_main", placeholder="$ Amount")
-        pay_note = st.text_input("Note", key="pay_note_main", placeholder="Bank transfer - Cash...")
+        pay_agent = st.selectbox("اسم الوكيل", agents_list, key="pay_agent_main")
+        pay_date = st.date_input("تاريخ الدفعة", datetime.now(), key="pay_date_main")
+        pay_amount = st.text_input("مبلغ الدفعة $", key="pay_amount_main", placeholder="$ Amount")
+        pay_method = st.selectbox("طريقة الدفعة", ["Bank Transfer", "Cash", "USDT", "Office Pay", "Credit Card", "Other"], key="pay_method_main")
+        pay_statement = st.text_input("البيان", key="pay_statement_main", placeholder="مثلا: دفعة حجز فندق...")
+        pay_note = st.text_input("ملاحظة", key="pay_note_main", placeholder="Bank - Cash...")
 
         if st.button("Add Payment", use_container_width=True, type="primary", key="btn_add_pay_main"):
             amt = to_f_local(pay_amount)
@@ -1590,26 +1591,29 @@ with left_side:
                 st.error("Please enter valid amount")
             else:
                 try:
-                    conn = sqlite3.connect(DB)
-                    conn.execute("""
-                        CREATE TABLE IF NOT EXISTS agent_payments (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            agent TEXT,
-                            pay_date TEXT,
-                            amount REAL,
-                            note TEXT
-                        )
-                    """)
-                    conn.execute(
-                        "INSERT INTO agent_payments (agent, pay_date, amount, note) VALUES (?,?,?,?)",
-                        (pay_agent, str(pay_date), amt, pay_note)
-                    )
-                    conn.commit()
-                    conn.close()
-                    st.success(f"Added ${amt} for {pay_agent}")
+                    _sheet = get_gspread_sheet()
+                    spreadsheet = _sheet.spreadsheet
+                    try:
+                        pay_ws = spreadsheet.worksheet("Payments")
+                    except:
+                        pay_ws = spreadsheet.add_worksheet(title="Payments", rows=2000, cols=10)
+                        pay_ws.append_row(["Pay Date", "Agent Name", "Amount", "Payment Method", "البيان - Statement", "ملاحظة - Note", "Created At"], value_input_option="USER_ENTERED")
+
+                    pay_ws.append_row([
+                        str(pay_date),
+                        pay_agent,
+                        amt,
+                        pay_method,
+                        pay_statement,
+                        pay_note,
+                        str(datetime.now())
+                    ], value_input_option="USER_ENTERED")
+                    
+                    st.success(f"✅ تمت اضافة ${amt} للوكيل {pay_agent}")
+                    st.cache_data.clear()
                     st.rerun()
                 except Exception as e:
-                    st.error(f"DB Error: {e}")
+                    st.error(f"Error: {e}")
 
         try:
             pdf_bytes = generate_pdf_bytes(pay_agent)
