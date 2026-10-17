@@ -1952,15 +1952,26 @@ with t3:
         with st.container(border=True):
             st.markdown("#### ✈️ Airlines")
             with st.form(key="f_airlines", clear_on_submit=True):
-                nal = st.text_input("", placeholder="Airlines name...", label_visibility="collapsed")
-                sal = st.form_submit_button("Add Airline", use_container_width=True)
+                nal = st.text_input("Airlines name", placeholder="Airlines name...", label_visibility="collapsed")
+                sal = st.form_submit_button("Add Airline", width='stretch')
                 if sal and nal.strip():
                     conn=sqlite3.connect(DB)
-                    try: conn.execute("INSERT INTO airlines (name) VALUES (?)", (nal.strip(),)); conn.commit()
-                    except: pass
-                    conn.close(); st.rerun()
-            conn=sqlite3.connect(DB); dfal=pd.read_sql("SELECT name as Airlines FROM airlines ORDER BY name", conn); conn.close()
-            st.dataframe(dfal, use_container_width=True, height=250, hide_index=True)
+                    try: 
+                        conn.execute("CREATE TABLE IF NOT EXISTS airlines (name TEXT PRIMARY KEY)")
+                        conn.execute("INSERT INTO airlines (name) VALUES (?)", (nal.strip(),))
+                        conn.commit()
+                    except Exception as e:
+                        print(f"airline insert error: {e}")
+                    conn.close()
+                    st.rerun()
+            conn=sqlite3.connect(DB)
+            try:
+                conn.execute("CREATE TABLE IF NOT EXISTS airlines (name TEXT PRIMARY KEY)")
+                dfal=pd.read_sql("SELECT name as Airlines FROM airlines ORDER BY name", conn)
+            except:
+                dfal=pd.DataFrame(columns=["Airlines"])
+            conn.close()
+            st.dataframe(dfal, width='stretch', height=250, hide_index=True)
 
     with c4:
         with st.container(border=True):
