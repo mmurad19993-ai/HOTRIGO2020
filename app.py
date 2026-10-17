@@ -320,23 +320,26 @@ def get_logo_b64():
     return None
 
 def init():
-    conn=sqlite3.connect(DB, check_same_thread=False)
-    c=conn.cursor()
-    c.execute("CREATE TABLE IF NOT EXISTS bookings (id INTEGER PRIMARY KEY AUTOINCREMENT, sale_date TEXT, entry_date TEXT, exit_date TEXT, company TEXT, passengers TEXT, pax_count INTEGER DEFAULT 1, hotel TEXT, nights INTEGER, price_night REAL, hotel_total REAL, flight REAL, transport REAL, sell REAL, cost REAL, profit REAL, voucher TEXT, notes TEXT, airline TEXT, emp TEXT, flight_dep_time TEXT, flight_ret_time TEXT, room_type TEXT, transport_company TEXT, flight_no_dep TEXT, flight_no_ret TEXT, room_count INTEGER)")
-    c.execute("CREATE TABLE IF NOT EXISTS agents (name TEXT UNIQUE)")
-    c.execute("CREATE TABLE IF NOT EXISTS hotels (name TEXT UNIQUE)")
-    c.execute("CREATE TABLE IF NOT EXISTS airlines (name TEXT UNIQUE)")
-    c.execute("CREATE TABLE IF NOT EXISTS transport_companies (name TEXT UNIQUE)")
-    c.execute("CREATE TABLE IF NOT EXISTS agent_payments (id INTEGER PRIMARY KEY AUTOINCREMENT, agent TEXT, pay_date TEXT, amount REAL, note TEXT)")
-    cols = [x[1] for x in c.execute("PRAGMA table_info(bookings)").fetchall()]
-    for col in ["flight_dep_time","flight_ret_time","airline","emp","room_type","transport_company","flight_no_dep","flight_no_ret","room_count"]:
-        if col not in cols:
-            if col=="room_count":
-                c.execute(f"ALTER TABLE bookings ADD COLUMN {col} INTEGER DEFAULT 1")
-            else:
-                c.execute(f"ALTER TABLE bookings ADD COLUMN {col} TEXT")
-    conn.commit()
-    conn.close()
+    """
+    Init الجديد - ما عاد في sqlite ولا DB
+    كل شي صار على Google Sheet مباشر
+    """
+    try:
+        sheet = get_gspread_sheet()
+        if sheet:
+            try:
+                # اذا الشيت فاضي، حط الهيدر
+                first_row = sheet.row_values(1)
+                if not first_row or len(first_row) == 0:
+                    sheet.update('A1', [SHEET_HEADER])
+                    print("✅ Header created in Sheet")
+            except Exception as e:
+                print(f"Header check: {e}")
+        print("✅ Init done - Google Sheet ready")
+    except Exception as e:
+        print(f"Init warning: {e}")
+    
+    return True
 init()
 
 if "pending" not in st.session_state:
