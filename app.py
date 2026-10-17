@@ -724,12 +724,15 @@ def edit_dialog(row):
         st.error("Sheet not connected")
         return
 
-    # row هو رقم السطر بالشيت او بيانات الصف
     try:
-        row_idx = int(row[0]) if isinstance(row, (list, tuple)) and str(row[0]).isdigit() else int(row)
+        if isinstance(row, int):
+            row_idx = row
+        elif isinstance(row, (list, tuple)) and len(row)>0 and str(row[0]).isdigit():
+            row_idx = int(row[0])
+        else:
+            row_idx = int(row)
         if row_idx < 2: row_idx = 2
     except:
-        # اذا اجا row كامل، خذ اول حجز بالشيت كحل مؤقت
         row_idx = 2
 
     try:
@@ -739,14 +742,11 @@ def edit_dialog(row):
             st.error("Booking not found in Sheet")
             return
         d_row = all_vals[row_idx-1]
-        # حول ل dict
         d = {}
         for i, h in enumerate(header):
             d[h] = d_row[i] if i < len(d_row) else ""
-        # عشان الكود القديم يلي تحت يشتغل
         d['id'] = row_idx
-        if 'company' not in d and 'Company' in d:
-            d['company'] = d['Company']
+        if 'company' not in d and 'Company' in d: d['company'] = d['Company']
     except Exception as e:
         st.error(f"Booking not found: {e}")
         return
@@ -813,7 +813,6 @@ def edit_dialog(row):
 
     e_trans_co = st.text_input("Transport Company (empty=no transfer)", value=gv("transport_company"), key="dlg_transco")
 
-    # ===== شبكة ثابتة + تنقل ذكي للـ textarea =====
     components.html("""
     <script>
     const doc = window.parent.document;
@@ -853,7 +852,6 @@ def edit_dialog(row):
         if(curIdx===-1) return;
         const active = doc.activeElement;
         const isArea = active.tagName==='TEXTAREA';
-        
         if(isArea){
             const start = active.selectionStart;
             const end = active.selectionEnd;
@@ -869,7 +867,6 @@ def edit_dialog(row):
             if(e.key==='ArrowRight' && active.selectionStart < active.value.length) return;
             if(e.key==='ArrowLeft' && active.selectionStart > 0) return;
         }
-        
         const pos=findPos(curIdx);
         if(!pos) return;
         let target=null;
@@ -914,30 +911,71 @@ def edit_dialog(row):
             s = e_rc_text.strip()
             e_rc_final = 0 if s == "" else int(float(s))
         except: e_rc_final = 0
-        comp_full, comp_ok = smart_match(e_comp, agents_for_js, agents_upper)
-        hotel_full, hotel_ok = smart_match(e_hotel, hotels_for_js, hotels_upper)
-        is_no_flight = e_air.strip() == "" or e_air.strip() == "0"
-        is_no_trans = e_trans_co.strip() == "" or e_trans_co.strip() == "0"
-        air_full, air_ok = ("", True) if is_no_flight else smart_match(e_air, airlines_for_js, airlines_upper)
-        trans_full, trans_ok = ("", True) if is_no_trans else smart_match(e_trans_co, transport_for_js, transport_upper)
-        if not comp_ok or not hotel_ok or not air_ok or not trans_ok:
-            st.error("Agent/Hotel/Airline/Transport not found!"); return
-        conn = sqlite3.connect(DB)
-        for col in ["price_per_night REAL","flight_cost REAL","transport_cost REAL","notes TEXT","voucher_no TEXT","dep_airport TEXT","ret_airport TEXT"]:
-            try: conn.execute(f"ALTER TABLE bookings ADD COLUMN {col}")
-            except: pass
-        conn.execute("""UPDATE bookings SET sale_date=?, company=?, passengers=?, room_type=?, room_count=?, hotel=?,
-            entry_date=?, exit_date=?, price_per_night=?, flight_cost=?, transport_cost=?, sell=?,
-            notes=?, voucher_no=?, airline=?, emp=?, flight_dep_time=?, flight_ret_time=?,
-            transport_company=?, flight_no_dep=?, flight_no_ret=?, dep_airport=?, ret_airport=?
-            WHERE id=?""",
-            (e_sale, comp_full, e_pas, e_room, e_rc_final, hotel_full, e_entry, e_exit,
-             to_f(e_pn), to_f(e_fl), to_f(e_tr), to_f(e_sell), e_notes, e_vno, air_full, e_emp,
-             e_dep, e_ret, trans_full, e_fno_dep, e_fno_ret, e_dep_air, e_ret_air, d.get('id')))
-        conn.commit(); conn.close()
-        with st.spinner("Updating Google Sheet..."):
-            sync_booking_to_sheet(d.get('id'))
-        st.session_state.table_version += 1; st.rerun()
+        
+        # تحقق بسيط - لغينا smart_match المعقد اذا بدك ترجعو رجعو
+        # comp_full, comp_ok = smart_match(e_comp, agents_for_js, agents_upper)
+        # بس هلأ منحفظ مباشر
+        comp_full = e_comp
+        hotel_full = e_hotel
+        air_full = e_air
+        trans_full = e_trans_co
+
+        # ابن الصف الجديد بنفس ترتيب الهيدر
+        new_data = {
+            'sale_date': e_sale,
+            'company': comp_full,
+            'passengers': e_pas,
+            'room_type': e_room,
+            'room_count': str(e_rc_final),
+            'hotel': hotel_full,
+            'entry_date': e_entry,
+            'exit_date': e_exit,
+            'price_per_night': e_pn,
+            'flight_cost': e_fl,
+            'transport_cost': e_tr,
+            'sell': e_sell,
+            'notes': e_notes,
+            'voucher_no': e_vno,
+            'airline': air_full,
+            'emp': e_emp,
+            'flight_dep_time': e_dep,
+            'flight_ret_time': e_ret,
+            'transport_company': trans_full,
+            'flight_no_dep': e_fno_dep,
+            'flight_no_ret': e_fno_ret,
+            'dep_airport': e_dep_air,
+            'ret_airport': e_ret_air,
+        }
+        
+        # حدث القاموس d
+        for k,v in new_data.items():
+            d[k] = v
+            # كمان حدث النسخ الكبيرة
+            if k == 'company': d['Company'] = v
+            if k == 'passengers': d['Passengers'] = v
+            if k == 'hotel': d['Hotel'] = v
+
+        new_row = []
+        for h in header:
+            # اذا الهيدر مطابق لمفتاح جديد
+            val = d.get(h, "")
+            # جرب المفتاح الصغير
+            if val == "" and h.lower() in [x.lower() for x in new_data.keys()]:
+                for nk,nv in new_data.items():
+                    if nk.lower() == h.lower() or nk.replace('_',' ').lower() == h.lower():
+                        val = nv
+                        break
+            new_row.append(str(val))
+
+        try:
+            with st.spinner("Updating Google Sheet..."):
+                sheet.update(f"A{row_idx}:Z{row_idx}", [new_row], value_input_option="USER_ENTERED")
+            st.success("✅ تم التحديث بالشيت!")
+            st.session_state.table_version += 1
+            import time; time.sleep(0.5)
+            st.rerun()
+        except Exception as e:
+            st.error(f"Error updating sheet: {e}")
 @st.dialog("Invoice - معاينة الفاتورة", width="large")
 def invoice_dialog(row):
     conn=sqlite3.connect(DB); full=conn.execute("SELECT * FROM bookings WHERE id=?", (int(row[0]),)).fetchone(); conn.close()
@@ -1155,18 +1193,15 @@ with t1:
                     st.session_state.do_clear=True; st.session_state.pending=None; st.rerun()
             with c2:
                 if st.button("NO", use_container_width=True): st.session_state.pending=None; st.rerun()
-with r:
+    with r:
         col_f1, col_f2, col_f3=st.columns([1.2, 1.2, 1.3])
         with col_f1: entry_date_val=st.date_input("entry_date_filter", value=None, key="entry_date_filter", label_visibility="collapsed")
         with col_f2: exit_date_val=st.date_input("exit_date_filter", value=None, key="exit_date_filter", label_visibility="collapsed")
         with col_f3:
             c_a,c_b=st.columns(2)
             with c_a: st.button("Show All", use_container_width=True, on_click=clear_filters)
-            with c_b:
-                if st.button("🔄 Sync All to Sheet", use_container_width=True):
-                    with st.spinner("جاري مزامنة كل الحجوزات..."):
-                        sync_all_to_sheet()
-                        st.success("تمت المزامنة!")
+            with c_b: st.caption("✅ Sheet Live")
+
         b_filter, b_btns = st.columns([1.0, 4.0])
         with b_filter: search_mode = st.selectbox("نوع البحث", ["الكل", "مسافر فقط", "وكيل فقط", "رقم حجز"], key="search_mode")
         with b_btns:
@@ -1177,55 +1212,97 @@ with r:
             with b4: statement_btn=st.button("Agent Statement", use_container_width=True, key="statement_btn", type="primary")
             with b5: view_btn=st.button("👁️ عرض", use_container_width=True, key="view_btn")
             with scol: search_val=st.text_input("Search", placeholder="Search...", label_visibility="collapsed", key="search")
-        conn=sqlite3.connect(DB)
-        base="SELECT * FROM bookings WHERE 1=1"; params=[]
-        if entry_date_val: base+=f" AND entry_date =?"; params.append(str(entry_date_val))
-        if exit_date_val: base+=f" AND exit_date =?"; params.append(str(exit_date_val))
-        if search_val.strip():
-            s=search_val.strip().replace("'", "''"); mode = st.session_state.get("search_mode", "الكل")
-            if mode == "رقم حجز":
-                if s.isdigit(): base+=f" AND id =?"; params.append(int(s))
-                else: base+=f" AND voucher LIKE? COLLATE NOCASE"; params.append(f"%{s}%")
-            elif mode == "مسافر فقط": base+=f" AND passengers LIKE? COLLATE NOCASE"; params.append(f"%{s}%")
-            elif mode == "وكيل فقط": base+=f" AND company LIKE? COLLATE NOCASE"; params.append(f"%{s}%")
-            else:
-                if s.isdigit(): base+=f" AND (id =? OR voucher LIKE? COLLATE NOCASE OR passengers LIKE? COLLATE NOCASE OR company LIKE? COLLATE NOCASE)"; params.extend([int(s), f"%{s}%", f"%{s}%", f"%{s}%"])
-                else: base+=f" AND (company LIKE? COLLATE NOCASE OR passengers LIKE? COLLATE NOCASE OR hotel LIKE? COLLATE NOCASE OR voucher LIKE? COLLATE NOCASE)"; like = f"%{s}%"; params.extend([like, like, like, like])
-        base+=" ORDER BY id DESC"
-        df_raw=pd.read_sql(base, conn, params=params); conn.close()
-        if df_raw.empty: display_df=pd.DataFrame(columns=["ID","Sale Date","Agent","Passengers","Room Type","Rooms","Hotel","Check-in","Check-out","Sell Price","Airline","Dep Time","Ret Time","Note","Employee","Transport Co"])
+
+        # ===== قراءة من Google Sheet مباشر =====
+        sheet = get_gspread_sheet()
+        if not sheet:
+            st.error("Sheet not connected")
+            st.stop()
+        all_vals = sheet.get_all_values()
+        if len(all_vals) < 2:
+            df_raw = pd.DataFrame()
+            display_df = pd.DataFrame(columns=["ID","Sale Date","Agent","Passengers","Room Type","Rooms","Hotel","Check-in","Check-out","Sell Price","Airline","Dep Time","Ret Time","Note","Employee","Transport Co"])
         else:
-            display_df=df_raw[["id","sale_date","company","passengers","room_type","room_count","hotel","entry_date","exit_date","sell","airline","flight_dep_time","flight_ret_time","notes","emp","transport_company"]].copy()
-            display_df.columns=["ID","Sale Date","Agent","Passengers","Room Type","Rooms","Hotel","Check-in","Check-out","Sell Price","Airline","Dep Time","Ret Time","Note","Employee","Transport Co"]
+            header = all_vals[0]
+            rows = all_vals[1:]
+            clean_rows = []
+            for r in rows:
+                if len(r) < len(header): r = r + [""] * (len(header)-len(r))
+                clean_rows.append(r[:len(header)])
+            df_raw = pd.DataFrame(clean_rows, columns=header)
+            df_raw["_sheet_row"] = [i+2 for i in range(len(df_raw))]
+            
+            df_filtered = df_raw.copy()
+            s_raw = search_val.strip()
+            if s_raw:
+                s = s_raw.lower()
+                mode = st.session_state.get("search_mode", "الكل")
+                if mode == "مسافر فقط":
+                    df_filtered = df_filtered[df_filtered.apply(lambda row: s in str(row.get("passengers","")).lower(), axis=1)]
+                elif mode == "وكيل فقط":
+                    df_filtered = df_filtered[df_filtered.apply(lambda row: s in str(row.get("company","")).lower(), axis=1)]
+                else:
+                    df_filtered = df_filtered[df_filtered.apply(lambda row: s in str(row.values).lower(), axis=1)]
+            if entry_date_val:
+                df_filtered = df_filtered[df_filtered.apply(lambda row: str(entry_date_val) in str(row.values), axis=1)]
+            if exit_date_val:
+                df_filtered = df_filtered[df_filtered.apply(lambda row: str(exit_date_val) in str(row.values), axis=1)]
+
+            if df_filtered.empty:
+                display_df = pd.DataFrame(columns=["ID","Sale Date","Agent","Passengers","Room Type","Rooms","Hotel","Check-in","Check-out","Sell Price","Airline","Dep Time","Ret Time","Note","Employee","Transport Co"])
+            else:
+                cols_map = ["id","sale_date","company","passengers","room_type","room_count","hotel","entry_date","exit_date","sell","airline","flight_dep_time","flight_ret_time","notes","emp","transport_company"]
+                existing = [c for c in cols_map if c in df_filtered.columns]
+                if existing and len(existing) > 5:
+                    display_df = df_filtered[existing].copy()
+                    display_df.columns = ["ID","Sale Date","Agent","Passengers","Room Type","Rooms","Hotel","Check-in","Check-out","Sell Price","Airline","Dep Time","Ret Time","Note","Employee","Transport Co"][:len(existing)]
+                else:
+                    display_df = df_filtered.drop(columns=["_sheet_row"], errors='ignore').copy()
+                df_raw = df_filtered
+
+        if 'display_df' not in locals() or display_df is None:
+            display_df = pd.DataFrame(columns=["ID","Sale Date","Agent","Passengers","Room Type","Rooms","Hotel","Check-in","Check-out","Sell Price","Airline","Dep Time","Ret Time","Note","Employee","Transport Co"])
+
         event = st.dataframe(display_df, use_container_width=True, height=650, hide_index=True, on_select="rerun", selection_mode="multi-row", key=f"main_table_{st.session_state.table_version}")
         st.markdown(f"**Total bookings: {len(df_raw)}**")
         selected_rows = event.selection.rows if event and hasattr(event, 'selection') else []
         selected_ids = []
         if selected_rows and not df_raw.empty:
-            selected_ids = df_raw.iloc[selected_rows]["id"].tolist()
-            st.info(f"✅ محدد: ID {selected_ids[0]}")
+            try:
+                selected_ids = df_raw.iloc[selected_rows]["_sheet_row"].tolist()
+                st.info(f"✅ محدد: Sheet Row {selected_ids[0]}")
+            except:
+                selected_ids = [selected_rows[0]+2]
+
         def get_selected_ids(): return selected_ids
         def get_selected_agent():
-            if selected_rows and not df_raw.empty: return df_raw.iloc[selected_rows[0]]["company"]
+            if selected_rows and not df_raw.empty:
+                try: return df_raw.iloc[selected_rows[0]].get("company","")
+                except: return None
             return None
+
+        # ===== الأزرار صارت تقرا من الشيت =====
         if edit_btn:
             ids=get_selected_ids()
             if len(ids)!=1: st.error("اكبس على سطر واحد وبعدين Edit")
             else:
-                conn=sqlite3.connect(DB); row=conn.execute("SELECT * FROM bookings WHERE id=?", (int(ids[0]),)).fetchone(); conn.close()
-                if row: edit_dialog(row)
+                row_idx = int(ids[0])
+                # ابعت رقم السطر للـ edit_dialog
+                edit_dialog(row_idx)
+
         if inv_btn:
             ids=get_selected_ids()
             if len(ids)!=1: st.error("اكبس على سطر واحد وبعدين Invoice")
             else:
-                conn=sqlite3.connect(DB); row=conn.execute("SELECT * FROM bookings WHERE id=?", (int(ids[0]),)).fetchone(); conn.close()
-                if row: invoice_dialog(row)
+                row_idx = int(ids[0])
+                invoice_dialog(row_idx)
+
         if voucher_btn:
             ids=get_selected_ids()
             if len(ids)!=1: st.error("اكبس على سطر واحد وبعدين Voucher")
             else:
-                conn=sqlite3.connect(DB); row=conn.execute("SELECT * FROM bookings WHERE id=?", (int(ids[0]),)).fetchone(); conn.close()
-                if row: voucher_dialog(row)
+                row_idx = int(ids[0])
+                voucher_dialog(row_idx)
 if statement_btn:
     ag = get_selected_agent()
     if not ag:
