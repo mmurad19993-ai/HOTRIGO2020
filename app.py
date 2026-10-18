@@ -160,7 +160,6 @@ with t1:
 
         hotel=st.selectbox("Hotel *", options=hotels_list if hotels_list else [""], key="hotel_main")
 
-        # Rooms بنفس الترتيب
         rooms_count_str = st.text_input("Rooms Count", value="1", key="rooms_count_main")
         try:
             rooms_count = int(rooms_count_str) if rooms_count_str.strip() else 1
@@ -183,10 +182,11 @@ with t1:
         xd=ed+timedelta(days=nights_val)
         st.caption(f"Check-out: {xd}")
         pn_s=st.text_input("Price per Night $", key="pn_main")
+        flight_s=st.text_input("Flight $", key="flight_main")
+        trans_s=st.text_input("Transport $", key="trans_main")
         sell_s=st.text_input("Selling Price $ *", key="sell_main")
-        pn=to_f(pn_s); sell=to_f(sell_s)
+        pn=to_f(pn_s); flight_p=to_f(flight_s); trans_p=to_f(trans_s); sell=to_f(sell_s)
 
-        # حسبة توتال الفندق فقط
         hotel_total = (pn * nights_val * rooms_count) if pn and nights_val and rooms_count else 0
         if hotel_total:
             st.caption(f"Hotel Total: {rooms_count} x {nights_val} x ${pn} = ${hotel_total}")
@@ -211,6 +211,8 @@ with t1:
                         row_dict["Check-out"] = xd.strftime("%Y-%m-%d")
                         row_dict["Price Night"] = str(pn) if pn else ""
                         row_dict["Hotel Total"] = str(hotel_total) if hotel_total else ""
+                        row_dict["Flight $"] = str(flight_p) if flight_p else ""
+                        row_dict["Transport $"] = str(trans_p) if trans_p else ""
                         row_dict["Sell Price"] = str(sell) if sell else ""
                         row_dict["Sale Date"] = sd.strftime("%Y-%m-%d")
                         row_dict["Employee"] = emp
