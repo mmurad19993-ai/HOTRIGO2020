@@ -359,39 +359,38 @@ with t3:
     conn.commit(); conn.close()
     
     c1,c2,c3,c4=st.columns(4)
-    with c1:
+        with c1:
         st.markdown("#### 👥 Agents")
-        with st.form(key="f_agents_final", clear_on_submit=True):
-            na=st.text_input("Agent name", placeholder="Agent name...", label_visibility="collapsed")
-            if st.form_submit_button("Add Agent", width='stretch') and na.strip():
-                try:
-                    import gspread
-                    from google.oauth2.service_account import Credentials
-                    scope = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
-                    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
-                    client = gspread.authorize(creds)
-                    ws = client.open("HOTRIGO_DATABASE").worksheet("Agents_balance")
-                    rows = ws.get_all_values()
-                    next_id = len(rows) + 1
-                    ws.append_row([next_id, na.strip().upper()])
-                    st.rerun()
-                except Exception as e:
-                    st.error(e)
 
-        # عرض من الدرايف - كل ما بتفتح الموقع بيرجع يسحبهم
-        try:
-            import gspread
-            from google.oauth2.service_account import Credentials
+        import gspread
+        from google.oauth2.service_account import Credentials
+
+        @st.cache_resource
+        def get_agents_ws():
             scope = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
             creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
             client = gspread.authorize(creds)
-            ws = client.open("HOTRIGO_DATABASE").worksheet("Agents_balance")
-            vals = ws.get_all_values()
-            if vals:
-                dfa = pd.DataFrame(vals, columns=["ID", "Agents"])
-            else:
-                dfa = pd.DataFrame(columns=["ID", "Agents"])
-        except:
+            sh = client.open("HOTRIGO_DATABASE")
+            try:
+                return sh.worksheet("Agents_balance")
+            except:
+                return sh.add_worksheet(title="Agents_balance", rows=1000, cols=2)
+
+        with st.form(key="f_agents_final", clear_on_submit=True):
+            na=st.text_input("Agent name", placeholder="Agent name...", label_visibility="collapsed")
+            if st.form_submit_button("Add Agent", width='stretch') and na.strip():
+                ws = get_agents_ws()
+                rows = ws.get_all_values()
+                next_id = len(rows) + 1  # أول واحد = 1
+                ws.append_row([next_id, na.strip().upper()])
+                st.rerun()
+
+        # عرض من الدرايف كل ما تفتح الموقع
+        ws = get_agents_ws()
+        vals = ws.get_all_values()
+        if vals:
+            dfa = pd.DataFrame(vals, columns=["ID", "Agents"])
+        else:
             dfa = pd.DataFrame(columns=["ID", "Agents"])
         
         st.dataframe(dfa, width='stretch', height=400, hide_index=True)
