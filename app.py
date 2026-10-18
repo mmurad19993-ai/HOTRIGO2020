@@ -474,17 +474,24 @@ with c2:
             except Exception as e:
                 st.error(f"Error: {e}")
     
-    # العرض من الدرايف مباشرة - مو من sqlite
+    # العرض من الدرايف مباشرة - صار متل الوكلاء تماما ID | HOTELS | TOTAL | TOTAL_PAY | BALANCE | NOTE
     try:
         ws = get_gspread_sheet("HOTELS")
         if ws:
-            vals = ws.col_values(2)[1:]  # العمود B = HOTELS متل الصورة
-            vals = [v for v in vals if v.strip() and not v.strip().isdigit()]
-            dfh = pd.DataFrame({"Hotels": vals})
+            all_vals = ws.get_all_values()
+            if len(all_vals) > 1:
+                # ناخذ اول سطر ك هيدر وباقي الاسطر ك داتا
+                header = all_vals[0]
+                rows = all_vals[1:]
+                dfh = pd.DataFrame(rows, columns=header)
+                # تنظيف الاعمدة الفاضية
+                dfh = dfh.loc[:, dfh.columns.str.strip() != ""]
+            else:
+                dfh = pd.DataFrame(columns=["ID","HOTELS","TOTAL","TOTAL_PAY","BALANCE","NOTE"])
         else:
-            dfh = pd.DataFrame(columns=["Hotels"])
-    except:
-        dfh = pd.DataFrame(columns=["Hotels"])
+            dfh = pd.DataFrame(columns=["ID","HOTELS","TOTAL","TOTAL_PAY","BALANCE","NOTE"])
+    except Exception as e:
+        dfh = pd.DataFrame(columns=["ID","HOTELS","TOTAL","TOTAL_PAY","BALANCE","NOTE"])
     st.dataframe(dfh, width='stretch', height=400, hide_index=True)
 
 with c3:
