@@ -121,6 +121,34 @@ def edit_dialog(row):
 st.markdown("## ✈️ hotrigo | Sheets Sync ✅")
 t1,t2,t3=st.tabs(["Sales", "Account Statement", "Agents & Hotels"])
 
+@st.dialog("Confirm Sale")
+def confirm_sale_dialog(row_dict, new_row):
+    st.write(f"**Agent:** {row_dict['Agent']}")
+    st.write(f"**Hotel:** {row_dict['Hotel']} - {row_dict['Nights']} Nights")
+    st.write(f"**Passengers:** {row_dict['Passengers Count']}")
+    st.write(f"**Sell:** ${row_dict['Sell Price']} | **Cost:** ${row_dict['Cost']} | **Profit:** ${row_dict['Profit']}")
+    if row_dict.get("Voucher No"): st.write(f"**Voucher:** {row_dict['Voucher No']}")
+    if row_dict.get("Notes"): st.write(f"**Notes:** {row_dict['Notes']}")
+    if row_dict.get("Airline"): 
+        st.write(f"**Airline:** {row_dict['Airline']} | Dep: {row_dict['Dep Time']} Ret: {row_dict['Ret Time']}")
+    if row_dict.get("Flight No Dep"): 
+        st.write(f"**Flight:** {row_dict['Flight No Dep']} -> {row_dict['Flight No Ret']}")
+    if row_dict.get("Transport Co"): 
+        st.write(f"**Transport:** {row_dict['Transport Co']}")
+    st.divider()
+    c1,c2 = st.columns(2)
+    with c1:
+        if st.button("✅ Confirm Save", type="primary", width='stretch', key="confirm_save_dialog"):
+            ws=get_gspread_sheet()
+            ws.append_row(new_row, value_input_option='USER_ENTERED')
+            st.success(f"✅ {row_dict['ID']} Saved")
+            st.session_state.table_version+=1
+            st.session_state.show_more=False
+            st.rerun()
+    with c2:
+        if st.button("❌ Cancel", width='stretch', key="cancel_save_dialog"):
+            st.rerun()
+
 with t1:
     l,r=st.columns([1, 4.8])
     with l:
