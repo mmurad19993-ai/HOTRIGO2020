@@ -190,13 +190,10 @@ with t1:
         hotel_total = (pn * nights_val * rooms_count) if pn and nights_val and rooms_count else 0
         cost_val = hotel_total + flight_p + trans_p
 
-        # الحسبة تحت سعر المبيع
-        if pn or flight_p or trans_p:
-            st.markdown("---")
-            st.markdown(f"**إجمالي الباكج:**\n- 🏨 الفندق: {rooms_count} × {nights_val} × ${pn} = **${hotel_total:.2f}**\n- ✈️ الطيران: **${flight_p:.2f}**\n- 🚌 النقل: **${trans_p:.2f}**")
-            st.info(f"💰 الكوست الإجمالي علينا: **${cost_val:.2f}**")
-            if sell:
-                st.success(f"📈 المبيع ${sell:.2f} - كوست ${cost_val:.2f} = ربح **${sell - cost_val:.2f}**")
+        # عرض صغير بس
+        if cost_val > 0:
+            st.caption(f"فندق: ${hotel_total:.0f} | طيران: ${flight_p:.0f} | نقل: ${trans_p:.0f}")
+            st.caption(f"توتال الكوست علينا: ${cost_val:.0f}")
         
         if st.button("SAVE SALE", type="primary", width='stretch', key="save_main"):
             if not comp.strip() or not hotel.strip() or not pas.strip(): 
