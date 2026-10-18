@@ -98,7 +98,7 @@ def load_list_sheet(_version, name):
         if name.lower() == "agents":
             sheet_name = "Agents_Balance"
         if name.lower() == "hotels":
-            sheet_name = "Hotels_Balance"
+            sheet_name = "HOTELS"  # هون كان الغلط - مو Hotels_Balance
         if name.lower() == "airlines":
             sheet_name = "Airlines_Balance"
         if "transport" in name.lower():
@@ -108,7 +108,8 @@ def load_list_sheet(_version, name):
         if not ws:
             return []
         
-        if "Agents" in sheet_name:
+        # هون كان الغلط الثاني - كان بس Agents - هلا صار Agents و HOTELS
+        if "Agents" in sheet_name or "HOTELS" in sheet_name or "Hotels" in sheet_name:
             raw = [x.strip() for x in ws.col_values(2)[1:] if x.strip()]
             # شيل الارقام يلي طالعة "1" بالصورة + شيل التكرار
             clean = []
