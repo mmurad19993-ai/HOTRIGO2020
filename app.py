@@ -360,7 +360,7 @@ with t3:
     
     c1,c2=st.columns(2)
     with c1:
-        st.markdown("#### 👥 تعريف الوكلاء")
+        st.markdown("#### 👥 Agents")
         with st.form(key="f_agents_final", clear_on_submit=True):
             na=st.text_input("Agent name", placeholder="Agent name...", label_visibility="collapsed")
             if st.form_submit_button("Add Agent", width='stretch') and na.strip():
@@ -375,7 +375,7 @@ with t3:
         st.dataframe(dfa, width='stretch', height=250, hide_index=True)
         
     with c2:
-        st.markdown("#### 🏨 تعريف الفنادق")
+        st.markdown("#### 🏨 Hotels")
         with st.form(key="f_hotels_final", clear_on_submit=True):
             nh=st.text_input("Hotel name", placeholder="Hotel name...", label_visibility="collapsed")
             if st.form_submit_button("Add Hotel", width='stretch') and nh.strip():
@@ -389,10 +389,9 @@ with t3:
         conn.close()
         st.dataframe(dfh, width='stretch', height=250, hide_index=True)
 
-    # السطر الثاني - هون الإضافات الجديدة
     c3,c4=st.columns(2)
     with c3:
-        st.markdown("#### 🚌 تعريف شركة النقل")
+        st.markdown("#### 🚌 Transport Companies")
         with st.form(key="f_trans_final", clear_on_submit=True):
             nt=st.text_input("Transport name", placeholder="Transport company...", label_visibility="collapsed")
             if st.form_submit_button("Add Transport", width='stretch') and nt.strip():
@@ -407,7 +406,7 @@ with t3:
         st.dataframe(dft, width='stretch', height=250, hide_index=True)
         
     with c4:
-        st.markdown("#### ✈️ تعريف شركات الطيران")
+        st.markdown("#### ✈️ Airlines")
         with st.form(key="f_air_final", clear_on_submit=True):
             nl=st.text_input("Airline name", placeholder="Airline name...", label_visibility="collapsed")
             if st.form_submit_button("Add Airline", width='stretch') and nl.strip():
