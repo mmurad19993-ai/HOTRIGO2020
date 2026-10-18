@@ -94,7 +94,26 @@ def get_gspread_sheet(worksheet_name=None):
 @st.cache_data(ttl=600)
 def load_list_sheet(_version, name):
     try:
-        return [x.strip() for x in get_gspread_sheet(name).col_values(1)[1:] if x.strip()]
+        # صحح اسم الشيت
+        sheet_name = name
+        if name.lower() == "agents":
+            sheet_name = "Agents_Balance"
+        if name.lower() == "hotels":
+            sheet_name = "Hotels_Balance"
+        if name.lower() == "airlines":
+            sheet_name = "Airlines_Balance"
+        if "transport" in name.lower():
+            sheet_name = "Transport_Balance"
+            
+        ws = get_gspread_sheet(sheet_name)
+        if not ws:
+            return []
+        
+        # شيت الوكلاء - الاسم بالعمود 2
+        if "Agents" in sheet_name:
+            return [x.strip() for x in ws.col_values(2)[1:] if x.strip()]
+        else:
+            return [x.strip() for x in ws.col_values(1)[1:] if x.strip()]
     except:
         return []
 
@@ -108,16 +127,12 @@ def add_payment(tab_name, name_value, amount_val, note_val, note1_val):
 
 def load_lists():
     try:
-        conn = sqlite3.connect(DB)
-        conn.execute("CREATE TABLE IF NOT EXISTS agents (name TEXT PRIMARY KEY)")
-        conn.execute("CREATE TABLE IF NOT EXISTS hotels (name TEXT PRIMARY KEY)")
-        conn.execute("CREATE TABLE IF NOT EXISTS airlines (name TEXT PRIMARY KEY)")
-        conn.execute("CREATE TABLE IF NOT EXISTS transport_companies (name TEXT PRIMARY KEY)")
-        agents = [r[0] for r in conn.execute("SELECT name FROM agents ORDER BY name").fetchall()]
-        hotels = [r[0] for r in conn.execute("SELECT name FROM hotels ORDER BY name").fetchall()]
-        conn.close()
+        # هلا صار يقرا من الدرايف يلي فيه AHMAD - مو من sqlite
+        agents = load_list_sheet(st.session_state.get("table_version", "v1"), "Agents")
+        hotels = load_list_sheet(st.session_state.get("table_version", "v1"), "Hotels")
         return agents, hotels
-    except: return [], []
+    except: 
+        return [], []
 
 agents_for_js, hotels_for_js = load_lists()
 
