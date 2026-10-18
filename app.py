@@ -14,6 +14,39 @@ DB = os.path.join(BASE_DIR, "hotrigo.db")
 SHEET_HEADER = ["ID","Agent","Passengers","Passengers Count","Hotel","Rooms","Room Type","Check-in","Nights","Check-out","Price Night","Hotel Total","Flight $","Transport $","Sell Price","Cost","Profit","Sale Date","Voucher No","Notes","Airline","Employee","Dep Time","Ret Time","Flight No Dep","Flight No Ret","Transport Co"]
 lock = threading.Lock()
 
+import streamlit.components.v1 as components
+
+def enable_arrow_enter():
+    components.html("""
+    <script>
+    const doc = window.parent.document;
+    function getInputs(){
+        return Array.from(doc.querySelectorAll('input[type="text"], input[type="number"], textarea, input[type="date"]'))
+               .filter(el => el.offsetParent !== null && !el.disabled);
+    }
+    doc.addEventListener('keydown', function(e){
+        const keys = ['Enter','ArrowDown','ArrowUp','Tab'];
+        if(!keys.includes(e.key)) return;
+        const active = doc.activeElement;
+        const inputs = getInputs();
+        const idx = inputs.indexOf(active);
+        if(idx === -1) return;
+        if(active.tagName === 'TEXTAREA' && e.key === 'Enter' && e.shiftKey) return;
+        e.preventDefault();
+        let next = idx;
+        if(e.key === 'Enter' || e.key === 'ArrowDown' || (e.key === 'Tab' && !e.shiftKey)){
+            next = idx + 1;
+        } else if(e.key === 'ArrowUp' || (e.key === 'Tab' && e.shiftKey)){
+            next = idx - 1;
+        }
+        if(next >=0 && next < inputs.length){
+            inputs[next].focus();
+            if(inputs[next].select) inputs[next].select();
+        }
+    }, true);
+    </script>
+    """, height=0, width=0)
+
 def to_f(v):
     try: return float(str(v).strip().replace(',', '').replace('$','') or 0)
     except: return 0.0
