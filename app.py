@@ -2,8 +2,7 @@ import streamlit as st
 import sqlite3
 from datetime import datetime, timedelta
 import pandas as pd
-import os, re, base64
-from pathlib import Path
+import os, re
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -17,49 +16,51 @@ def to_f(v):
     try: return float(str(v).strip().replace(',', '').replace('$','') or 0)
     except: return 0.0
 
-def sanitize_filename(name):
-    return re.sub(r'[\\/*?:"<>|]', "", str(name))[:50]
-
 if "table_version" not in st.session_state:
     st.session_state.table_version = 0
 
-# ========== دالة مصلحة 100% ==========
 def get_sheet_id_clean():
     raw = st.secrets.get("SHEET_ID", SHEET_ID_FALLBACK)
     raw = str(raw).strip().strip('"').strip("'").strip()
-    # يقطع الرابط لو حطيت رابط كامل
     m = re.search(r"/d/([a-zA-Z0-9-_]+)", raw)
     if m:
         return m.group(1)
     return raw
 
+@st.cache_resource
+def get_gspread_client():
+    creds_info = dict(st.secrets["gcp_service_account"])
+    if "\\n" in creds_info.get("private_key",""):
+        creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
+    scopes = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
+    creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+    return gspread.authorize(creds)
+
 def get_gspread_sheet(worksheet_name=None):
     try:
+        client = get_gspread_client()
         sid = get_sheet_id_clean()
-        creds_info = dict(st.secrets["gcp_service_account"])
-        # اصلاح مشكلة \n
-        if "\\n" in creds_info.get("private_key",""):
-            creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
-        scopes = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
-        client = gspread.authorize(creds)
         
+        ss = None
+        # الحل النهائي: افتح بالاسم يلي شفناه بالصورة
         try:
-            ss = client.open_by_key(sid)
-        except Exception as e:
-            st.error(f"Sheet Error: {e} - ID: {sid}")
-            # ديباغ - شو شايف البوت
+            ss = client.open("HOTRIGO_DATABASE")
+        except:
             try:
+                ss = client.open_by_key(sid)
+            except Exception as e:
+                # اخر محاولة من الليستة
                 files = client.list_spreadsheet_files()
-                if not files:
-                    st.error("البوت ما شايف ولا شيت! اعمل Share مع: hotrigo-sync@hotrigo.iam.gserviceaccount.com")
-                else:
+                for f in files:
+                    if f['id'] == sid or "HOTRIGO" in f['name'].upper():
+                        ss = client.open_by_key(f['id'])
+                        break
+                if not ss:
+                    st.error(f"Sheet Error: {e} - ID: {sid}")
                     with st.expander("الشيتات يلي البوت شايفها"):
                         for f in files:
                             st.write(f"✅ {f['name']} -> {f['id']}")
-            except Exception as e2:
-                st.error(f"فعل Google Drive API من Google Cloud: {e2}")
-            return None
+                    return None
 
         if worksheet_name:
             try: return ss.worksheet(worksheet_name)
@@ -143,7 +144,6 @@ with t1:
                 try:
                     ws=get_gspread_sheet()
                     if ws:
-                        # === الحفظ الصح بطريقة آمنة ===
                         row_dict = {h: "" for h in SHEET_HEADER}
                         row_dict["ID"] = str(int(datetime.now().timestamp()))
                         row_dict["Agent"] = comp
@@ -156,7 +156,6 @@ with t1:
                         row_dict["Sell Price"] = str(sell) if sell else ""
                         row_dict["Sale Date"] = sd.strftime("%Y-%m-%d")
                         row_dict["Employee"] = emp
-                        
                         new_row = [row_dict.get(h,"") for h in SHEET_HEADER]
                         ws.append_row(new_row, value_input_option='USER_ENTERED')
                         st.success(f"✅ {row_dict['ID']} Saved"); 
@@ -166,7 +165,7 @@ with t1:
     with r:
         search_val=st.text_input("Search", placeholder="Search...", key="search_main")
         sheet=get_gspread_sheet()
-        if not sheet: st.error("Sheet not connected - شوف الخطأ فوق"); st.stop()
+        if not sheet: st.error("Sheet not connected"); st.stop()
         all_vals=sheet.get_all_values()
         if len(all_vals)<2: df_raw=pd.DataFrame()
         else:
