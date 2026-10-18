@@ -185,6 +185,11 @@ with t1:
         pn_s=st.text_input("Price per Night $", key="pn_main")
         sell_s=st.text_input("Selling Price $ *", key="sell_main")
         pn=to_f(pn_s); sell=to_f(sell_s)
+
+        # حسبة توتال الفندق فقط
+        hotel_total = (pn * nights_val * rooms_count) if pn and nights_val and rooms_count else 0
+        if hotel_total:
+            st.caption(f"Hotel Total: {rooms_count} x {nights_val} x ${pn} = ${hotel_total}")
         
         if st.button("SAVE SALE", type="primary", width='stretch', key="save_main"):
             if not comp.strip() or not hotel.strip() or not pas.strip(): 
@@ -201,18 +206,15 @@ with t1:
                         row_dict["Hotel"] = hotel
                         row_dict["Rooms"] = str(int(rooms_count))
                         row_dict["Room Type"] = rooms_str
-                        row_dict["Price Night"] = str(pn) if pn else ""
-                        # Hotel Total يحسب لحاله
-                        hotel_total = (pn * nights_val * rooms_count) if pn and nights_val else 0
-                        row_dict["Hotel Total"] = str(hotel_total) if hotel_total else ""
                         row_dict["Check-in"] = ed.strftime("%Y-%m-%d")
                         row_dict["Nights"] = str(nights_val)
                         row_dict["Check-out"] = xd.strftime("%Y-%m-%d")
+                        row_dict["Price Night"] = str(pn) if pn else ""
+                        row_dict["Hotel Total"] = str(hotel_total) if hotel_total else ""
                         row_dict["Sell Price"] = str(sell) if sell else ""
                         row_dict["Sale Date"] = sd.strftime("%Y-%m-%d")
                         row_dict["Employee"] = emp
                         
-                        # اهم شي: الترتيب نفس ترتيب الشيت تماماً
                         new_row = [row_dict.get(h,"") for h in SHEET_HEADER]
                         ws.append_row(new_row, value_input_option='USER_ENTERED')
                         st.success(f"✅ {row_dict['ID']} Saved"); 
