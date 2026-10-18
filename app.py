@@ -259,7 +259,8 @@ with t1:
                     ws=get_gspread_sheet()
                     if ws:
                         row_dict = {h: "" for h in SHEET_HEADER}
-                        row_dict["ID"] = str(int(datetime.now().timestamp()))
+                        ids = [int(x) for x in ws.col_values(1)[1:] if str(x).isdigit() and int(x) < 1000000]
+                        row_dict["ID"] = str(max(ids)+1 if ids else 1)
                         row_dict["Agent"] = comp
                         row_dict["Passengers"] = pas
                         row_dict["Passengers Count"] = str(int(pax_count))
