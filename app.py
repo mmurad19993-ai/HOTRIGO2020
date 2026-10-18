@@ -137,7 +137,6 @@ with t1:
         
         pax_names_list = []
         pas = ""
-
         if pax_count > 0 and pax_count <= 20:
             for i in range(int(pax_count)):
                 nm = st.text_input(f"Passenger {i+1}", key=f"pax_{i}_{st.session_state.table_version}")
@@ -160,6 +159,23 @@ with t1:
                     st.error(f"{e}")
 
         hotel=st.selectbox("Hotel *", options=hotels_list if hotels_list else [""], key="hotel_main")
+
+        # Rooms بنفس الترتيب
+        rooms_count_str = st.text_input("Rooms Count", value="1", key="rooms_count_main")
+        try:
+            rooms_count = int(rooms_count_str) if rooms_count_str.strip() else 1
+        except:
+            rooms_count = 1
+        
+        rooms_list = []
+        rooms_str = ""
+        if rooms_count > 0 and rooms_count <= 20:
+            for i in range(int(rooms_count)):
+                rm = st.text_input(f"Room {i+1} Type", key=f"room_{i}_{st.session_state.table_version}")
+                if rm.strip():
+                    rooms_list.append(rm.strip())
+            rooms_str = "\n".join(rooms_list)
+
         ed=st.date_input("Check-in", datetime.now()+timedelta(days=1), key="ed_main")
         nights=st.text_input("Nights", value="", key="nights_main")
         try: nights_val=int(nights) if nights else 0
@@ -183,13 +199,20 @@ with t1:
                         row_dict["Passengers"] = pas
                         row_dict["Passengers Count"] = str(int(pax_count))
                         row_dict["Hotel"] = hotel
+                        row_dict["Rooms"] = str(int(rooms_count))
+                        row_dict["Room Type"] = rooms_str
                         row_dict["Price Night"] = str(pn) if pn else ""
+                        # Hotel Total يحسب لحاله
+                        hotel_total = (pn * nights_val * rooms_count) if pn and nights_val else 0
+                        row_dict["Hotel Total"] = str(hotel_total) if hotel_total else ""
                         row_dict["Check-in"] = ed.strftime("%Y-%m-%d")
                         row_dict["Nights"] = str(nights_val)
                         row_dict["Check-out"] = xd.strftime("%Y-%m-%d")
                         row_dict["Sell Price"] = str(sell) if sell else ""
                         row_dict["Sale Date"] = sd.strftime("%Y-%m-%d")
                         row_dict["Employee"] = emp
+                        
+                        # اهم شي: الترتيب نفس ترتيب الشيت تماماً
                         new_row = [row_dict.get(h,"") for h in SHEET_HEADER]
                         ws.append_row(new_row, value_input_option='USER_ENTERED')
                         st.success(f"✅ {row_dict['ID']} Saved"); 
