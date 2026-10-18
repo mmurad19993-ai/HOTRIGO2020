@@ -91,10 +91,9 @@ def get_gspread_sheet(worksheet_name=None):
         st.error(f"Sheet Error: {e}")
         return None
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=30)
 def load_list_sheet(_version, name):
     try:
-        # صحح اسم الشيت
         sheet_name = name
         if name.lower() == "agents":
             sheet_name = "Agents_Balance"
@@ -109,14 +108,23 @@ def load_list_sheet(_version, name):
         if not ws:
             return []
         
-        # شيت الوكلاء - الاسم بالعمود 2
         if "Agents" in sheet_name:
-            return [x.strip() for x in ws.col_values(2)[1:] if x.strip()]
+            raw = [x.strip() for x in ws.col_values(2)[1:] if x.strip()]
+            # شيل الارقام يلي طالعة "1" بالصورة + شيل التكرار
+            clean = []
+            seen = set()
+            for v in raw:
+                if v.isdigit(): 
+                    continue
+                low = v.lower()
+                if low not in seen:
+                    seen.add(low)
+                    clean.append(v)
+            return clean
         else:
             return [x.strip() for x in ws.col_values(1)[1:] if x.strip()]
     except:
         return []
-
 def add_payment(tab_name, name_value, amount_val, note_val, note1_val):
     try:
         ws = get_gspread_sheet(tab_name)
