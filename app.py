@@ -395,21 +395,21 @@ with c1:
         dfa = pd.DataFrame(columns=["ID", "Agents"])
     
     st.dataframe(dfa, width='stretch', height=400, hide_index=True)
-    with c2:
-        st.markdown("#### 🏨 Hotels")
-        with st.form(key="f_hotels_final", clear_on_submit=True):
-            nh=st.text_input("Hotel name", placeholder="Hotel name...", label_visibility="collapsed")
-            if st.form_submit_button("Add Hotel", width='stretch') and nh.strip():
-                conn=sqlite3.connect(DB)
-                try: conn.execute("INSERT INTO hotels (name) VALUES (?)", (nh.strip(),)); conn.commit()
-                except: pass
-                conn.close(); st.rerun()
-        conn=sqlite3.connect(DB)
-        try: dfh=pd.read_sql("SELECT name as Hotels FROM hotels ORDER BY name", conn)
-        except: dfh=pd.DataFrame(columns=["Hotels"])
-        conn.close()
-        st.dataframe(dfh, width='stretch', height=400, hide_index=True)
 
+with c2:
+    st.markdown("#### 🏨 Hotels")
+    with st.form(key="f_hotels_final", clear_on_submit=True):
+        nh=st.text_input("Hotel name", placeholder="Hotel name...", label_visibility="collapsed")
+        if st.form_submit_button("Add Hotel", width='stretch') and nh.strip():
+            conn=sqlite3.connect(DB)
+            try: conn.execute("INSERT INTO hotels (name) VALUES (?)", (nh.strip(),)); conn.commit()
+            except: pass
+            conn.close(); st.rerun()
+    conn=sqlite3.connect(DB)
+    try: dfh=pd.read_sql("SELECT name as Hotels FROM hotels ORDER BY name", conn)
+    except: dfh=pd.DataFrame(columns=["Hotels"])
+    conn.close()
+    st.dataframe(dfh, width='stretch', height=400, hide_index=True)
     with c3:
         st.markdown("#### 🚌 Transport")
         with st.form(key="f_trans_final", clear_on_submit=True):
