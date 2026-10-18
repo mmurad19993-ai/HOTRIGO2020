@@ -372,28 +372,26 @@ with c1:
         creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
         client = gspread.authorize(creds)
         sh = client.open("HOTRIGO_DATABASE")
-        try:
-            return sh.worksheet("Agents_balance")
-        except:
-            return sh.add_worksheet(title="Agents_balance", rows=1000, cols=2)
+        return sh.worksheet("Agents_Balance")
 
     with st.form(key="f_agents_final", clear_on_submit=True):
         na=st.text_input("Agent name", placeholder="Agent name...", label_visibility="collapsed")
         if st.form_submit_button("Add Agent", width='stretch') and na.strip():
             ws = get_agents_ws()
             rows = ws.get_all_values()
-            next_id = len(rows) + 1  # أول واحد = 1
-            ws.append_row([next_id, na.strip().upper()])
+            if rows and rows[0][0].upper() == "ID":
+                next_id = len(rows)
+            else:
+                next_id = len(rows) + 1
+            ws.append_row([next_id, na.strip().upper(), 0, 0, 0, ""])
             st.rerun()
 
-    # عرض من الدرايف كل ما تفتح الموقع
     ws = get_agents_ws()
     vals = ws.get_all_values()
-    if vals:
-        dfa = pd.DataFrame(vals, columns=["ID", "Agents"])
+    if len(vals) > 1:
+        dfa = pd.DataFrame(vals[1:], columns=vals[0])
     else:
         dfa = pd.DataFrame(columns=["ID", "Agents"])
-    
     st.dataframe(dfa, width='stretch', height=400, hide_index=True)
 
 with c2:
@@ -410,32 +408,33 @@ with c2:
     except: dfh=pd.DataFrame(columns=["Hotels"])
     conn.close()
     st.dataframe(dfh, width='stretch', height=400, hide_index=True)
-    with c3:
-        st.markdown("#### 🚌 Transport")
-        with st.form(key="f_trans_final", clear_on_submit=True):
-            nt=st.text_input("Transport name", placeholder="Transport company...", label_visibility="collapsed")
-            if st.form_submit_button("Add Transport", width='stretch') and nt.strip():
-                conn=sqlite3.connect(DB)
-                try: conn.execute("INSERT INTO transports (name) VALUES (?)", (nt.strip(),)); conn.commit()
-                except: pass
-                conn.close(); st.rerun()
-        conn=sqlite3.connect(DB)
-        try: dft=pd.read_sql("SELECT name as Transport FROM transports ORDER BY name", conn)
-        except: dft=pd.DataFrame(columns=["Transport"])
-        conn.close()
-        st.dataframe(dft, width='stretch', height=400, hide_index=True)
-        
-    with c4:
-        st.markdown("#### ✈️ Airlines")
-        with st.form(key="f_air_final", clear_on_submit=True):
-            nl=st.text_input("Airline name", placeholder="Airline name...", label_visibility="collapsed")
-            if st.form_submit_button("Add Airline", width='stretch') and nl.strip():
-                conn=sqlite3.connect(DB)
-                try: conn.execute("INSERT INTO airlines (name) VALUES (?)", (nl.strip(),)); conn.commit()
-                except: pass
-                conn.close(); st.rerun()
-        conn=sqlite3.connect(DB)
-        try: dfa2=pd.read_sql("SELECT name as Airlines FROM airlines ORDER BY name", conn)
-        except: dfa2=pd.DataFrame(columns=["Airlines"])
-        conn.close()
-        st.dataframe(dfa2, width='stretch', height=400, hide_index=True)
+
+with c3:
+    st.markdown("#### 🚌 Transport")
+    with st.form(key="f_trans_final", clear_on_submit=True):
+        nt=st.text_input("Transport name", placeholder="Transport company...", label_visibility="collapsed")
+        if st.form_submit_button("Add Transport", width='stretch') and nt.strip():
+            conn=sqlite3.connect(DB)
+            try: conn.execute("INSERT INTO transports (name) VALUES (?)", (nt.strip(),)); conn.commit()
+            except: pass
+            conn.close(); st.rerun()
+    conn=sqlite3.connect(DB)
+    try: dft=pd.read_sql("SELECT name as Transport FROM transports ORDER BY name", conn)
+    except: dft=pd.DataFrame(columns=["Transport"])
+    conn.close()
+    st.dataframe(dft, width='stretch', height=400, hide_index=True)
+
+with c4:
+    st.markdown("#### ✈️ Airlines")
+    with st.form(key="f_air_final", clear_on_submit=True):
+        nl=st.text_input("Airline name", placeholder="Airline name...", label_visibility="collapsed")
+        if st.form_submit_button("Add Airline", width='stretch') and nl.strip():
+            conn=sqlite3.connect(DB)
+            try: conn.execute("INSERT INTO airlines (name) VALUES (?)", (nl.strip(),)); conn.commit()
+            except: pass
+            conn.close(); st.rerun()
+    conn=sqlite3.connect(DB)
+    try: dfa2=pd.read_sql("SELECT name as Airlines FROM airlines ORDER BY name", conn)
+    except: dfa2=pd.DataFrame(columns=["Airlines"])
+    conn.close()
+    st.dataframe(dfa2, width='stretch', height=400, hide_index=True)
