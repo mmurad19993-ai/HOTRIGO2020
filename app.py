@@ -120,7 +120,8 @@ def edit_dialog(row):
 
 st.markdown("## ✈️ hotrigo | Sheets Sync ✅")
 t1,t2,t3=st.tabs(["Sales", "Account Statement", "Agents & Hotels"])
-    with c1:
+
+with t1:
         if st.button("✅ Confirm Save", type="primary", width='stretch', key="confirm_save_dialog"):
             ws=get_gspread_sheet()
             ws.append_row(new_row, value_input_option='USER_ENTERED')
