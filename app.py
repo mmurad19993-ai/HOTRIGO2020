@@ -359,41 +359,42 @@ with t3:
     conn.commit(); conn.close()
     
     c1,c2,c3,c4=st.columns(4)
-        with c1:
-        st.markdown("#### 👥 Agents")
 
-        import gspread
-        from google.oauth2.service_account import Credentials
+with c1:
+    st.markdown("#### 👥 Agents")
 
-        @st.cache_resource
-        def get_agents_ws():
-            scope = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
-            creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
-            client = gspread.authorize(creds)
-            sh = client.open("HOTRIGO_DATABASE")
-            try:
-                return sh.worksheet("Agents_balance")
-            except:
-                return sh.add_worksheet(title="Agents_balance", rows=1000, cols=2)
+    import gspread
+    from google.oauth2.service_account import Credentials
 
-        with st.form(key="f_agents_final", clear_on_submit=True):
-            na=st.text_input("Agent name", placeholder="Agent name...", label_visibility="collapsed")
-            if st.form_submit_button("Add Agent", width='stretch') and na.strip():
-                ws = get_agents_ws()
-                rows = ws.get_all_values()
-                next_id = len(rows) + 1  # أول واحد = 1
-                ws.append_row([next_id, na.strip().upper()])
-                st.rerun()
+    @st.cache_resource
+    def get_agents_ws():
+        scope = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+        client = gspread.authorize(creds)
+        sh = client.open("HOTRIGO_DATABASE")
+        try:
+            return sh.worksheet("Agents_balance")
+        except:
+            return sh.add_worksheet(title="Agents_balance", rows=1000, cols=2)
 
-        # عرض من الدرايف كل ما تفتح الموقع
-        ws = get_agents_ws()
-        vals = ws.get_all_values()
-        if vals:
-            dfa = pd.DataFrame(vals, columns=["ID", "Agents"])
-        else:
-            dfa = pd.DataFrame(columns=["ID", "Agents"])
-        
-        st.dataframe(dfa, width='stretch', height=400, hide_index=True)
+    with st.form(key="f_agents_final", clear_on_submit=True):
+        na=st.text_input("Agent name", placeholder="Agent name...", label_visibility="collapsed")
+        if st.form_submit_button("Add Agent", width='stretch') and na.strip():
+            ws = get_agents_ws()
+            rows = ws.get_all_values()
+            next_id = len(rows) + 1  # أول واحد = 1
+            ws.append_row([next_id, na.strip().upper()])
+            st.rerun()
+
+    # عرض من الدرايف كل ما تفتح الموقع
+    ws = get_agents_ws()
+    vals = ws.get_all_values()
+    if vals:
+        dfa = pd.DataFrame(vals, columns=["ID", "Agents"])
+    else:
+        dfa = pd.DataFrame(columns=["ID", "Agents"])
+    
+    st.dataframe(dfa, width='stretch', height=400, hide_index=True)
     with c2:
         st.markdown("#### 🏨 Hotels")
         with st.form(key="f_hotels_final", clear_on_submit=True):
