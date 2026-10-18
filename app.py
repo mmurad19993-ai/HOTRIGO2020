@@ -127,6 +127,13 @@ with t1:
         sd=st.date_input("Sale Date", datetime.now(), key="sd_main")
         emp=st.text_input("Sales Employee *", key="emp_main")
         agents_list, hotels_list = load_lists()
+        try:
+            airlines_list = [x.strip() for x in get_gspread_sheet("Airlines").col_values(1)[1:] if x.strip()]
+        except: airlines_list=[]
+        try:
+            transport_list = [x.strip() for x in get_gspread_sheet("TransportCo").col_values(1)[1:] if x.strip()]
+        except: transport_list=[]
+
         comp=st.selectbox("Agent *", options=agents_list if agents_list else [""], key="comp_main")
         
         pax_count_str = st.text_input("Passengers Count", value="1", key="pax_count_main")
@@ -196,10 +203,29 @@ with t1:
 
         note = st.text_input("Notes", key="note_main")
         voucher_no = st.text_input("Voucher No", key="voucher_main")
+
+        # --- كبسة مشاهدة المزيد تحت الفاوتشر ---
+        if "show_more" not in st.session_state: st.session_state.show_more=False
+        if st.button("View More ⏬" if not st.session_state.show_more else "View Less ⏫", key="view_more_btn"):
+            st.session_state.show_more = not st.session_state.show_more
+
+        dep_time=""; ret_time=""; flight_no_dep=""; flight_no_ret=""; airline_sel=""; transport_co_sel=""
+        if st.session_state.show_more:
+            with st.container(border=True):
+                airline_sel = st.selectbox("Airline *", options=[""]+airlines_list, key="airline_more")
+                transport_co_sel = st.selectbox("Transport Co *", options=[""]+transport_list, key="transport_co_more")
+                dep_time = st.text_input("Dep Time", key="dep_time_more", placeholder="10:30")
+                ret_time = st.text_input("Ret Time", key="ret_time_more", placeholder="18:00")
+                flight_no_dep = st.text_input("Airport Dep / Flight No Dep", key="flight_no_dep_more")
+                flight_no_ret = st.text_input("Airport Ret / Flight No Ret", key="flight_no_ret_more")
         
         if st.button("SAVE SALE", type="primary", width='stretch', key="save_main"):
             if not comp.strip() or not hotel.strip() or not pas.strip(): 
                 st.error("Fill required")
+            elif st.session_state.show_more and airline_sel and airline_sel not in airlines_list:
+                st.error(f"Airline '{airline_sel}' مو معرفة! لازم تعرفها اول بشيت Airlines")
+            elif st.session_state.show_more and transport_co_sel and transport_co_sel not in transport_list:
+                st.error(f"Transport Co '{transport_co_sel}' مو معرفة! لازم تعرفها اول بشيت TransportCo")
             else:
                 try:
                     ws=get_gspread_sheet()
@@ -222,15 +248,23 @@ with t1:
                         row_dict["Sell Price"] = str(sell) if sell else ""
                         row_dict["Cost"] = str(cost_val) if cost_val else ""
                         row_dict["Profit"] = str(sell - cost_val) if sell else ""
-                        row_dict["Note"] = note
+                        row_dict["Notes"] = note
                         row_dict["Voucher No"] = voucher_no
                         row_dict["Sale Date"] = sd.strftime("%Y-%m-%d")
                         row_dict["Employee"] = emp
+                        # الحقول الجديدة
+                        row_dict["Airline"] = airline_sel if st.session_state.show_more else ""
+                        row_dict["Dep Time"] = dep_time if st.session_state.show_more else ""
+                        row_dict["Ret Time"] = ret_time if st.session_state.show_more else ""
+                        row_dict["Flight No Dep"] = flight_no_dep if st.session_state.show_more else ""
+                        row_dict["Flight No Ret"] = flight_no_ret if st.session_state.show_more else ""
+                        row_dict["Transport Co"] = transport_co_sel if st.session_state.show_more else ""
                         
                         new_row = [row_dict.get(h,"") for h in SHEET_HEADER]
                         ws.append_row(new_row, value_input_option='USER_ENTERED')
                         st.success(f"✅ {row_dict['ID']} Saved"); 
-                        st.session_state.table_version+=1; 
+                        st.session_state.table_version+=1
+                        st.session_state.show_more=False
                         st.rerun()
                 except Exception as e: st.error(f"{e}")
 
