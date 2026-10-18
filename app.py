@@ -98,20 +98,19 @@ def load_list_sheet(_version, name):
         if name.lower() == "agents":
             sheet_name = "Agents_Balance"
         if name.lower() == "hotels":
-            sheet_name = "HOTELS"  # هون كان الغلط - مو Hotels_Balance
+            sheet_name = "HOTELS"
         if name.lower() == "airlines":
-            sheet_name = "Airlines_Balance"
+            sheet_name = "Airlines"  # او AIRLINES - صورلي شو اسمو بالضبط
         if "transport" in name.lower():
-            sheet_name = "Transport_Balance"
+            sheet_name = "TransportCo"  # هاد اسمك الصح من الصورة
             
         ws = get_gspread_sheet(sheet_name)
         if not ws:
             return []
         
-        # هون كان الغلط الثاني - كان بس Agents - هلا صار Agents و HOTELS
-        if "Agents" in sheet_name or "HOTELS" in sheet_name or "Hotels" in sheet_name:
-            raw = [x.strip() for x in ws.col_values(2)[1:] if x.strip()]
-            # شيل الارقام يلي طالعة "1" بالصورة + شيل التكرار
+        # هون كان الغلط - لازم يشمل الكل متل الوكلاء والفنادق
+        if "Agents" in sheet_name or "HOTELS" in sheet_name or "TransportCo" in sheet_name or "Airlines" in sheet_name or "AIRLINES" in sheet_name:
+            raw = [x.strip() for x in ws.col_values(2)[1:] if x.strip()]  # العمود B
             clean = []
             seen = set()
             for v in raw:
@@ -124,7 +123,7 @@ def load_list_sheet(_version, name):
             return clean
         else:
             return [x.strip() for x in ws.col_values(1)[1:] if x.strip()]
-    except:
+    except Exception as e:
         return []
 def add_payment(tab_name, name_value, amount_val, note_val, note1_val):
     try:
