@@ -2,7 +2,7 @@ import streamlit as st
 import sqlite3
 from datetime import datetime, timedelta
 import pandas as pd
-import os, re
+import os, re, threading
 import gspread
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
@@ -12,6 +12,7 @@ SHEET_ID_FALLBACK = "1WyJlLeChys_qh_qCxjFUZBq-FlhgHbhBaizMcg21Zqc"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(BASE_DIR, "hotrigo.db")
 SHEET_HEADER = ["ID","Agent","Passengers","Passengers Count","Hotel","Rooms","Room Type","Check-in","Nights","Check-out","Price Night","Hotel Total","Flight $","Transport $","Sell Price","Cost","Profit","Sale Date","Voucher No","Notes","Airline","Employee","Dep Time","Ret Time","Flight No Dep","Flight No Ret","Transport Co"]
+lock = threading.Lock()
 
 def to_f(v):
     try: return float(str(v).strip().replace(',', '').replace('$','') or 0)
@@ -37,32 +38,18 @@ def get_gspread_client():
     creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
     return gspread.authorize(creds)
 
+@st.cache_resource
+def get_spreadsheet():
+    client = get_gspread_client()
+    sid = get_sheet_id_clean()
+    try:
+        return client.open("HOTRIGO_DATABASE")
+    except:
+        return client.open_by_key(sid)
+
 def get_gspread_sheet(worksheet_name=None):
     try:
-        client = get_gspread_client()
-        sid = get_sheet_id_clean()
-        
-        ss = None
-        # الحل النهائي: افتح بالاسم يلي شفناه بالصورة
-        try:
-            ss = client.open("HOTRIGO_DATABASE")
-        except:
-            try:
-                ss = client.open_by_key(sid)
-            except Exception as e:
-                # اخر محاولة من الليستة
-                files = client.list_spreadsheet_files()
-                for f in files:
-                    if f['id'] == sid or "HOTRIGO" in f['name'].upper():
-                        ss = client.open_by_key(f['id'])
-                        break
-                if not ss:
-                    st.error(f"Sheet Error: {e} - ID: {sid}")
-                    with st.expander("الشيتات يلي البوت شايفها"):
-                        for f in files:
-                            st.write(f"✅ {f['name']} -> {f['id']}")
-                    return None
-
+        ss = get_spreadsheet()
         if worksheet_name:
             try: return ss.worksheet(worksheet_name)
             except: return ss.add_worksheet(title=worksheet_name, rows=2000, cols=30)
@@ -70,6 +57,13 @@ def get_gspread_sheet(worksheet_name=None):
     except Exception as e:
         st.error(f"Sheet Error: {e}")
         return None
+
+@st.cache_data(ttl=600)
+def load_list_sheet(_version, name):
+    try:
+        return [x.strip() for x in get_gspread_sheet(name).col_values(1)[1:] if x.strip()]
+    except:
+        return []
 
 def add_payment(tab_name, name_value, amount_val, note_val, note1_val):
     try:
@@ -115,7 +109,8 @@ def edit_dialog(row):
             if "Passengers" in header: new_row[header.index("Passengers")]=e_pas
             if "Hotel" in header: new_row[header.index("Hotel")]=e_hotel
             sheet.update(f"A{row}:ZZ{row}", [new_row], value_input_option="USER_ENTERED")
-            st.success("Updated"); st.session_state.table_version+=1; st.rerun()
+            st.session_state.table_version+=1
+            st.rerun()
         except Exception as e: st.error(str(e))
 
 st.markdown("## ✈️ hotrigo | Sheets Sync ✅")
@@ -155,12 +150,8 @@ with t1:
         sd=st.date_input("Sale Date", datetime.now(), key="sd_main")
         emp=st.text_input("Sales Employee *", key="emp_main")
         agents_list, hotels_list = load_lists()
-        try:
-            airlines_list = [x.strip() for x in get_gspread_sheet("Airlines").col_values(1)[1:] if x.strip()]
-        except: airlines_list=[]
-        try:
-            transport_list = [x.strip() for x in get_gspread_sheet("TransportCo").col_values(1)[1:] if x.strip()]
-        except: transport_list=[]
+        airlines_list = load_list_sheet(st.session_state.table_version, "Airlines")
+        transport_list = load_list_sheet(st.session_state.table_version, "TransportCo")
 
         comp=st.selectbox("Agent *", options=agents_list if agents_list else [""], key="comp_main")
         
@@ -232,7 +223,6 @@ with t1:
         note = st.text_input("Notes", key="note_main")
         voucher_no = st.text_input("Voucher No", key="voucher_main")
 
-        # --- كبسة مشاهدة المزيد تحت الفاوتشر ---
         if "show_more" not in st.session_state: st.session_state.show_more=False
         if st.button("View More ⏬" if not st.session_state.show_more else "View Less ⏫", key="view_more_btn"):
             st.session_state.show_more = not st.session_state.show_more
@@ -256,45 +246,46 @@ with t1:
                 st.error(f"Transport Co '{transport_co_sel}' مو معرفة! لازم تعرفها اول بشيت TransportCo")
             else:
                 try:
-                    ws=get_gspread_sheet()
-                    if ws:
-                        row_dict = {h: "" for h in SHEET_HEADER}
-                        ids = [int(x) for x in ws.col_values(1)[1:] if str(x).isdigit() and int(x) < 1000000]
-                        row_dict["ID"] = str(max(ids)+1 if ids else 1)
-                        row_dict["Agent"] = comp
-                        row_dict["Passengers"] = pas
-                        row_dict["Passengers Count"] = str(int(pax_count))
-                        row_dict["Hotel"] = hotel
-                        row_dict["Rooms"] = str(int(rooms_count))
-                        row_dict["Room Type"] = rooms_str
-                        row_dict["Check-in"] = ed.strftime("%Y-%m-%d")
-                        row_dict["Nights"] = str(nights_val)
-                        row_dict["Check-out"] = xd.strftime("%Y-%m-%d")
-                        row_dict["Price Night"] = str(pn) if pn else ""
-                        row_dict["Hotel Total"] = str(hotel_total) if hotel_total else ""
-                        row_dict["Flight $"] = str(flight_p) if flight_p else ""
-                        row_dict["Transport $"] = str(trans_p) if trans_p else ""
-                        row_dict["Sell Price"] = str(sell) if sell else ""
-                        row_dict["Cost"] = str(cost_val) if cost_val else ""
-                        row_dict["Profit"] = str(sell - cost_val) if sell else ""
-                        row_dict["Notes"] = note
-                        row_dict["Voucher No"] = voucher_no
-                        row_dict["Sale Date"] = sd.strftime("%Y-%m-%d")
-                        row_dict["Employee"] = emp
-                        # الحقول الجديدة
-                        row_dict["Airline"] = airline_sel if st.session_state.show_more else ""
-                        row_dict["Dep Time"] = dep_time if st.session_state.show_more else ""
-                        row_dict["Ret Time"] = ret_time if st.session_state.show_more else ""
-                        row_dict["Flight No Dep"] = flight_no_dep if st.session_state.show_more else ""
-                        row_dict["Flight No Ret"] = flight_no_ret if st.session_state.show_more else ""
-                        row_dict["Transport Co"] = transport_co_sel if st.session_state.show_more else ""
-                        
-                        new_row = [row_dict.get(h,"") for h in SHEET_HEADER]
-                        ws.append_row(new_row, value_input_option='USER_ENTERED')
-                        st.success(f"✅ {row_dict['ID']} Saved"); 
-                        st.session_state.table_version+=1
-                        st.session_state.show_more=False
-                        st.rerun()
+                    with lock:
+                        ws=get_gspread_sheet()
+                        if ws:
+                            row_dict = {h: "" for h in SHEET_HEADER}
+                            all_ids = ws.col_values(1)[1:]
+                            ids = [int(x) for x in all_ids if str(x).isdigit() and int(x) < 1000000]
+                            row_dict["ID"] = str(max(ids)+1 if ids else 1)
+                            row_dict["Agent"] = comp
+                            row_dict["Passengers"] = pas
+                            row_dict["Passengers Count"] = str(int(pax_count))
+                            row_dict["Hotel"] = hotel
+                            row_dict["Rooms"] = str(int(rooms_count))
+                            row_dict["Room Type"] = rooms_str
+                            row_dict["Check-in"] = ed.strftime("%Y-%m-%d")
+                            row_dict["Nights"] = str(nights_val)
+                            row_dict["Check-out"] = xd.strftime("%Y-%m-%d")
+                            row_dict["Price Night"] = str(pn) if pn else ""
+                            row_dict["Hotel Total"] = str(hotel_total) if hotel_total else ""
+                            row_dict["Flight $"] = str(flight_p) if flight_p else ""
+                            row_dict["Transport $"] = str(trans_p) if trans_p else ""
+                            row_dict["Sell Price"] = str(sell) if sell else ""
+                            row_dict["Cost"] = str(cost_val) if cost_val else ""
+                            row_dict["Profit"] = str(sell - cost_val) if sell else ""
+                            row_dict["Notes"] = note
+                            row_dict["Voucher No"] = voucher_no
+                            row_dict["Sale Date"] = sd.strftime("%Y-%m-%d")
+                            row_dict["Employee"] = emp
+                            row_dict["Airline"] = airline_sel if st.session_state.show_more else ""
+                            row_dict["Dep Time"] = dep_time if st.session_state.show_more else ""
+                            row_dict["Ret Time"] = ret_time if st.session_state.show_more else ""
+                            row_dict["Flight No Dep"] = flight_no_dep if st.session_state.show_more else ""
+                            row_dict["Flight No Ret"] = flight_no_ret if st.session_state.show_more else ""
+                            row_dict["Transport Co"] = transport_co_sel if st.session_state.show_more else ""
+                            
+                            new_row = [row_dict.get(h,"") for h in SHEET_HEADER]
+                            ws.append_row(new_row, value_input_option='USER_ENTERED')
+                    st.success(f"✅ {row_dict['ID']} Saved") 
+                    st.session_state.table_version+=1
+                    st.session_state.show_more=False
+                    st.rerun()
                 except Exception as e: st.error(f"{e}")
 
     with r:
