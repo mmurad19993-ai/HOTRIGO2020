@@ -180,6 +180,7 @@ def confirm_sale_dialog(row_dict, new_row):
 with t1:
     l,r=st.columns([1, 4.8])
     with l:
+        enable_arrow_enter()
         sd=st.date_input("Sale Date", datetime.now(), key="sd_main")
         emp=st.text_input("Sales Employee *", key="emp_main")
         agents_list, hotels_list = load_lists()
