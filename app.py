@@ -354,10 +354,13 @@ with t3:
     conn=sqlite3.connect(DB)
     conn.execute("CREATE TABLE IF NOT EXISTS agents (name TEXT PRIMARY KEY)")
     conn.execute("CREATE TABLE IF NOT EXISTS hotels (name TEXT PRIMARY KEY)")
+    conn.execute("CREATE TABLE IF NOT EXISTS transports (name TEXT PRIMARY KEY)")
+    conn.execute("CREATE TABLE IF NOT EXISTS airlines (name TEXT PRIMARY KEY)")
     conn.commit(); conn.close()
+    
     c1,c2=st.columns(2)
     with c1:
-        st.markdown("#### 👥 Agents")
+        st.markdown("#### 👥 تعريف الوكلاء")
         with st.form(key="f_agents_final", clear_on_submit=True):
             na=st.text_input("Agent name", placeholder="Agent name...", label_visibility="collapsed")
             if st.form_submit_button("Add Agent", width='stretch') and na.strip():
@@ -370,8 +373,9 @@ with t3:
         except: dfa=pd.DataFrame(columns=["Agents"])
         conn.close()
         st.dataframe(dfa, width='stretch', height=250, hide_index=True)
+        
     with c2:
-        st.markdown("#### 🏨 Hotels")
+        st.markdown("#### 🏨 تعريف الفنادق")
         with st.form(key="f_hotels_final", clear_on_submit=True):
             nh=st.text_input("Hotel name", placeholder="Hotel name...", label_visibility="collapsed")
             if st.form_submit_button("Add Hotel", width='stretch') and nh.strip():
@@ -384,3 +388,35 @@ with t3:
         except: dfh=pd.DataFrame(columns=["Hotels"])
         conn.close()
         st.dataframe(dfh, width='stretch', height=250, hide_index=True)
+
+    # السطر الثاني - هون الإضافات الجديدة
+    c3,c4=st.columns(2)
+    with c3:
+        st.markdown("#### 🚌 تعريف شركة النقل")
+        with st.form(key="f_trans_final", clear_on_submit=True):
+            nt=st.text_input("Transport name", placeholder="Transport company...", label_visibility="collapsed")
+            if st.form_submit_button("Add Transport", width='stretch') and nt.strip():
+                conn=sqlite3.connect(DB)
+                try: conn.execute("INSERT INTO transports (name) VALUES (?)", (nt.strip(),)); conn.commit()
+                except: pass
+                conn.close(); st.rerun()
+        conn=sqlite3.connect(DB)
+        try: dft=pd.read_sql("SELECT name as Transport FROM transports ORDER BY name", conn)
+        except: dft=pd.DataFrame(columns=["Transport"])
+        conn.close()
+        st.dataframe(dft, width='stretch', height=250, hide_index=True)
+        
+    with c4:
+        st.markdown("#### ✈️ تعريف شركات الطيران")
+        with st.form(key="f_air_final", clear_on_submit=True):
+            nl=st.text_input("Airline name", placeholder="Airline name...", label_visibility="collapsed")
+            if st.form_submit_button("Add Airline", width='stretch') and nl.strip():
+                conn=sqlite3.connect(DB)
+                try: conn.execute("INSERT INTO airlines (name) VALUES (?)", (nl.strip(),)); conn.commit()
+                except: pass
+                conn.close(); st.rerun()
+        conn=sqlite3.connect(DB)
+        try: dfa2=pd.read_sql("SELECT name as Airlines FROM airlines ORDER BY name", conn)
+        except: dfa2=pd.DataFrame(columns=["Airlines"])
+        conn.close()
+        st.dataframe(dfa2, width='stretch', height=250, hide_index=True)
