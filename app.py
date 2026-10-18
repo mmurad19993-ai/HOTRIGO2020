@@ -551,5 +551,3 @@ with c4:
     except:
         dfa2 = pd.DataFrame(columns=["ID","AIRLINE","TOTAL","PAY","BALANCE","NOTE"])
     st.dataframe(dfa2, width='stretch', height=400, hide_index=True)
-    conn.close()
-    st.dataframe(dfa2, width='stretch', height=400, hide_index=True)
