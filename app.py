@@ -190,10 +190,12 @@ with t1:
         hotel_total = (pn * nights_val * rooms_count) if pn and nights_val and rooms_count else 0
         cost_val = hotel_total + flight_p + trans_p
 
-        # عرض صغير بس
         if cost_val > 0:
             st.caption(f"فندق: ${hotel_total:.0f} | طيران: ${flight_p:.0f} | نقل: ${trans_p:.0f}")
             st.caption(f"توتال الكوست علينا: ${cost_val:.0f}")
+
+        note = st.text_area("ملاحظة", key="note_main", height=70)
+        voucher_no = st.text_input("رقم الفاوتشر", key="voucher_main")
         
         if st.button("SAVE SALE", type="primary", width='stretch', key="save_main"):
             if not comp.strip() or not hotel.strip() or not pas.strip(): 
@@ -220,6 +222,8 @@ with t1:
                         row_dict["Sell Price"] = str(sell) if sell else ""
                         row_dict["Cost"] = str(cost_val) if cost_val else ""
                         row_dict["Profit"] = str(sell - cost_val) if sell else ""
+                        row_dict["Note"] = note
+                        row_dict["Voucher No"] = voucher_no
                         row_dict["Sale Date"] = sd.strftime("%Y-%m-%d")
                         row_dict["Employee"] = emp
                         
