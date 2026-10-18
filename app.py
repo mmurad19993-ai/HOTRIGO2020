@@ -23,24 +23,51 @@ def sanitize_filename(name):
 if "table_version" not in st.session_state:
     st.session_state.table_version = 0
 
+# ========== دالة مصلحة 100% ==========
+def get_sheet_id_clean():
+    raw = st.secrets.get("SHEET_ID", SHEET_ID_FALLBACK)
+    raw = str(raw).strip().strip('"').strip("'").strip()
+    # يقطع الرابط لو حطيت رابط كامل
+    m = re.search(r"/d/([a-zA-Z0-9-_]+)", raw)
+    if m:
+        return m.group(1)
+    return raw
+
 def get_gspread_sheet(worksheet_name=None):
     try:
-        sid = st.secrets.get("SHEET_ID", SHEET_ID_FALLBACK)
-        sid = str(sid).strip().strip('"').strip("'").strip()
-        if "/d/" in sid: sid = sid.split("/d/")[1].split("/")[0]
+        sid = get_sheet_id_clean()
         creds_info = dict(st.secrets["gcp_service_account"])
+        # اصلاح مشكلة \n
         if "\\n" in creds_info.get("private_key",""):
             creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
         scopes = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
         creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
         client = gspread.authorize(creds)
-        ss = client.open_by_key(sid)
+        
+        try:
+            ss = client.open_by_key(sid)
+        except Exception as e:
+            st.error(f"Sheet Error: {e} - ID: {sid}")
+            # ديباغ - شو شايف البوت
+            try:
+                files = client.list_spreadsheet_files()
+                if not files:
+                    st.error("البوت ما شايف ولا شيت! اعمل Share مع: hotrigo-sync@hotrigo.iam.gserviceaccount.com")
+                else:
+                    with st.expander("الشيتات يلي البوت شايفها"):
+                        for f in files:
+                            st.write(f"✅ {f['name']} -> {f['id']}")
+            except Exception as e2:
+                st.error(f"فعل Google Drive API من Google Cloud: {e2}")
+            return None
+
         if worksheet_name:
             try: return ss.worksheet(worksheet_name)
             except: return ss.add_worksheet(title=worksheet_name, rows=2000, cols=30)
         return ss.sheet1
     except Exception as e:
-        st.error(f"Sheet Error: {e}"); return None
+        st.error(f"Sheet Error: {e}")
+        return None
 
 def add_payment(tab_name, name_value, amount_val, note_val, note1_val):
     try:
@@ -85,7 +112,7 @@ def edit_dialog(row):
             if "Agent" in header: new_row[header.index("Agent")]=e_comp
             if "Passengers" in header: new_row[header.index("Passengers")]=e_pas
             if "Hotel" in header: new_row[header.index("Hotel")]=e_hotel
-            sheet.update(f"A{row}:Z{row}", [new_row], value_input_option="USER_ENTERED")
+            sheet.update(f"A{row}:ZZ{row}", [new_row], value_input_option="USER_ENTERED")
             st.success("Updated"); st.session_state.table_version+=1; st.rerun()
         except Exception as e: st.error(str(e))
 
@@ -110,19 +137,36 @@ with t1:
         sell_s=st.text_input("Selling Price $ *", key="sell_main")
         pn=to_f(pn_s); sell=to_f(sell_s)
         if st.button("SAVE SALE", type="primary", width='stretch', key="save_main"):
-            if not comp.strip() or not hotel.strip() or not pas.strip(): st.error("Fill required")
+            if not comp.strip() or not hotel.strip() or not pas.strip(): 
+                st.error("Fill required")
             else:
                 try:
                     ws=get_gspread_sheet()
                     if ws:
-                        new_id=str(int(datetime.now().timestamp()))
-                        ws.append_row([new_id,comp,pas,"",hotel,"","","",str(pn),"","",str(nights_val),str(xd),str(ed),"","",str(sell),"","",str(sd),"","","",emp,"","","","",""], value_input_option='USER_ENTERED')
-                        st.success(f"✅ {new_id}"); st.session_state.table_version+=1; st.rerun()
+                        # === الحفظ الصح بطريقة آمنة ===
+                        row_dict = {h: "" for h in SHEET_HEADER}
+                        row_dict["ID"] = str(int(datetime.now().timestamp()))
+                        row_dict["Agent"] = comp
+                        row_dict["Passengers"] = pas
+                        row_dict["Hotel"] = hotel
+                        row_dict["Price Night"] = str(pn) if pn else ""
+                        row_dict["Check-in"] = ed.strftime("%Y-%m-%d")
+                        row_dict["Nights"] = str(nights_val)
+                        row_dict["Check-out"] = xd.strftime("%Y-%m-%d")
+                        row_dict["Sell Price"] = str(sell) if sell else ""
+                        row_dict["Sale Date"] = sd.strftime("%Y-%m-%d")
+                        row_dict["Employee"] = emp
+                        
+                        new_row = [row_dict.get(h,"") for h in SHEET_HEADER]
+                        ws.append_row(new_row, value_input_option='USER_ENTERED')
+                        st.success(f"✅ {row_dict['ID']} Saved"); 
+                        st.session_state.table_version+=1; 
+                        st.rerun()
                 except Exception as e: st.error(f"{e}")
     with r:
         search_val=st.text_input("Search", placeholder="Search...", key="search_main")
         sheet=get_gspread_sheet()
-        if not sheet: st.error("Sheet not connected"); st.stop()
+        if not sheet: st.error("Sheet not connected - شوف الخطأ فوق"); st.stop()
         all_vals=sheet.get_all_values()
         if len(all_vals)<2: df_raw=pd.DataFrame()
         else:
