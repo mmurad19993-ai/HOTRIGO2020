@@ -137,8 +137,9 @@ def add_payment(tab_name, name_value, amount_val, note_val, note1_val):
 def load_lists():
     try:
         # هلا صار يقرا من الدرايف يلي فيه AHMAD - مو من sqlite
-        agents = load_list_sheet(st.session_state.get("table_version", "v1"), "Agents")
-        hotels = load_list_sheet(st.session_state.get("table_version", "v1"), "Hotels")
+        v = st.session_state.get("table_version", 0)
+        agents = load_list_sheet(v, "Agents")
+        hotels = load_list_sheet(v, "Hotels")
         return agents, hotels
     except: 
         return [], []
