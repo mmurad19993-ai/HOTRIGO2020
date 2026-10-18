@@ -126,7 +126,41 @@ with t1:
         sd=st.date_input("Sale Date", datetime.now(), key="sd_main")
         emp=st.text_input("Sales Employee *", key="emp_main")
         comp=st.text_input("Agent *", key="comp_main")
-        pas=st.text_area("Passengers *", key="pas_main")
+        
+        # === الجديد: عدد المسافرين فوق الاسماء ===
+        pax_count = st.number_input("Passengers Count *", min_value=1, max_value=100, value=1, step=1, key="pax_count_main")
+        
+        pax_names_list = []
+        pas = "" # المتغير يلي رح ينحفظ بالشيت
+
+        if int(pax_count) <= 20:
+            st.caption(f"ادخل {int(pax_count)} اسماء:")
+            for i in range(int(pax_count)):
+                nm = st.text_input(f"Passenger {i+1}", key=f"pax_{i}_{st.session_state.table_version}", placeholder=f"Name {i+1}")
+                if nm.strip():
+                    pax_names_list.append(nm.strip())
+            pas = "\n".join(pax_names_list)
+        else:
+            st.warning("العدد اكتر من 20 - ارفع ملف Excel")
+            up = st.file_uploader("Upload Excel (عمود واحد فيه الاسماء)", type=["xlsx","xls","csv"], key="pax_excel_main")
+            if up is not None:
+                try:
+                    if up.name.lower().endswith(".csv"):
+                        df_up = pd.read_csv(up)
+                    else:
+                        df_up = pd.read_excel(up)
+                    # اول عمود
+                    pax_names_list = df_up.iloc[:,0].dropna().astype(str).map(lambda x: x.strip()).tolist()
+                    pax_names_list = [x for x in pax_names_list if x]
+                    pas = "\n".join(pax_names_list)
+                    st.success(f"تم تحميل {len(pax_names_list)} مسافر")
+                    st.dataframe(pd.DataFrame(pax_names_list, columns=["Names"]), height=200, hide_index=True)
+                    pax_count = len(pax_names_list)
+                except Exception as e:
+                    st.error(f"خطأ بالملف: {e}")
+            else:
+                pas = ""
+
         hotel=st.text_input("Hotel *", key="hotel_main")
         ed=st.date_input("Check-in", datetime.now()+timedelta(days=1), key="ed_main")
         nights=st.text_input("Nights", value="", key="nights_main")
@@ -137,9 +171,13 @@ with t1:
         pn_s=st.text_input("Price per Night $", key="pn_main")
         sell_s=st.text_input("Selling Price $ *", key="sell_main")
         pn=to_f(pn_s); sell=to_f(sell_s)
+        
         if st.button("SAVE SALE", type="primary", width='stretch', key="save_main"):
+            # تحقق
             if not comp.strip() or not hotel.strip() or not pas.strip(): 
-                st.error("Fill required")
+                st.error("عبي Agent + Hotel + اسماء المسافرين")
+            elif int(pax_count) <= 20 and len(pax_names_list) != int(pax_count):
+                st.error(f"لازم تدخل {int(pax_count)} اسماء - انت مدخل {len(pax_names_list)}")
             else:
                 try:
                     ws=get_gspread_sheet()
@@ -147,7 +185,9 @@ with t1:
                         row_dict = {h: "" for h in SHEET_HEADER}
                         row_dict["ID"] = str(int(datetime.now().timestamp()))
                         row_dict["Agent"] = comp
+                        # === الترتيب متل ما طلبت: اسماء بعدين عدد - نفس ترتيب شيت الدرايف ===
                         row_dict["Passengers"] = pas
+                        row_dict["Passengers Count"] = str(int(pax_count))
                         row_dict["Hotel"] = hotel
                         row_dict["Price Night"] = str(pn) if pn else ""
                         row_dict["Check-in"] = ed.strftime("%Y-%m-%d")
@@ -156,12 +196,14 @@ with t1:
                         row_dict["Sell Price"] = str(sell) if sell else ""
                         row_dict["Sale Date"] = sd.strftime("%Y-%m-%d")
                         row_dict["Employee"] = emp
+                        
                         new_row = [row_dict.get(h,"") for h in SHEET_HEADER]
                         ws.append_row(new_row, value_input_option='USER_ENTERED')
-                        st.success(f"✅ {row_dict['ID']} Saved"); 
+                        st.success(f"✅ {row_dict['ID']} Saved - {pax_count} pax"); 
                         st.session_state.table_version+=1; 
                         st.rerun()
                 except Exception as e: st.error(f"{e}")
+
     with r:
         search_val=st.text_input("Search", placeholder="Search...", key="search_main")
         sheet=get_gspread_sheet()
@@ -182,7 +224,6 @@ with t1:
         if st.button("Edit", width='stretch', key="edit_main"):
             if len(selected_ids)!=1: st.error("حدد سطر واحد")
             else: edit_dialog(int(selected_ids[0]))
-
 with t2:
     st.markdown("### 💰 Payments")
     try:
