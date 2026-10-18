@@ -194,7 +194,7 @@ with t1:
             st.caption(f"فندق: ${hotel_total:.0f} | طيران: ${flight_p:.0f} | نقل: ${trans_p:.0f}")
             st.caption(f"توتال الكوست علينا: ${cost_val:.0f}")
 
-        note = st.text_area("ملاحظة", key="note_main", height=70)
+        note = st.text_input("ملاحظة", key="note_main")
         voucher_no = st.text_input("رقم الفاوتشر", key="voucher_main")
         
         if st.button("SAVE SALE", type="primary", width='stretch', key="save_main"):
