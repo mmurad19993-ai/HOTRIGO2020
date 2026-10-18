@@ -5,6 +5,7 @@ import pandas as pd
 import os, re
 import gspread
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
 
 st.set_page_config(layout="wide", page_title="hotrigo")
 SHEET_ID_FALLBACK = "1WyJlLeChys_qh_qCxjFUZBq-FlhgHbhBaizMcg21Zqc"
@@ -125,7 +126,8 @@ with t1:
     with l:
         sd=st.date_input("Sale Date", datetime.now(), key="sd_main")
         emp=st.text_input("Sales Employee *", key="emp_main")
-        comp=st.text_input("Agent *", key="comp_main")
+        agents_list, hotels_list = load_lists()
+        comp=st.selectbox("Agent *", options=agents_list if agents_list else [""], key="comp_main")
         
         pax_count_str = st.text_input("Passengers Count", value="1", key="pax_count_main")
         try:
@@ -157,7 +159,7 @@ with t1:
                 except Exception as e:
                     st.error(f"{e}")
 
-        hotel=st.text_input("Hotel *", key="hotel_main")
+        hotel=st.selectbox("Hotel *", options=hotels_list if hotels_list else [""], key="hotel_main")
         ed=st.date_input("Check-in", datetime.now()+timedelta(days=1), key="ed_main")
         nights=st.text_input("Nights", value="", key="nights_main")
         try: nights_val=int(nights) if nights else 0
