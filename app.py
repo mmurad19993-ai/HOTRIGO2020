@@ -188,8 +188,15 @@ with t1:
         pn=to_f(pn_s); flight_p=to_f(flight_s); trans_p=to_f(trans_s); sell=to_f(sell_s)
 
         hotel_total = (pn * nights_val * rooms_count) if pn and nights_val and rooms_count else 0
-        if hotel_total:
-            st.caption(f"Hotel Total: {rooms_count} x {nights_val} x ${pn} = ${hotel_total}")
+        cost_val = hotel_total + flight_p + trans_p
+
+        # الحسبة تحت سعر المبيع
+        if pn or flight_p or trans_p:
+            st.markdown("---")
+            st.markdown(f"**إجمالي الباكج:**\n- 🏨 الفندق: {rooms_count} × {nights_val} × ${pn} = **${hotel_total:.2f}**\n- ✈️ الطيران: **${flight_p:.2f}**\n- 🚌 النقل: **${trans_p:.2f}**")
+            st.info(f"💰 الكوست الإجمالي علينا: **${cost_val:.2f}**")
+            if sell:
+                st.success(f"📈 المبيع ${sell:.2f} - كوست ${cost_val:.2f} = ربح **${sell - cost_val:.2f}**")
         
         if st.button("SAVE SALE", type="primary", width='stretch', key="save_main"):
             if not comp.strip() or not hotel.strip() or not pas.strip(): 
@@ -214,6 +221,8 @@ with t1:
                         row_dict["Flight $"] = str(flight_p) if flight_p else ""
                         row_dict["Transport $"] = str(trans_p) if trans_p else ""
                         row_dict["Sell Price"] = str(sell) if sell else ""
+                        row_dict["Cost"] = str(cost_val) if cost_val else ""
+                        row_dict["Profit"] = str(sell - cost_val) if sell else ""
                         row_dict["Sale Date"] = sd.strftime("%Y-%m-%d")
                         row_dict["Employee"] = emp
                         
