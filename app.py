@@ -498,27 +498,61 @@ with c3:
     with st.form(key="f_trans_final", clear_on_submit=True):
         nt=st.text_input("Transport name", placeholder="Transport company...", label_visibility="collapsed")
         if st.form_submit_button("Add Transport", width='stretch') and nt.strip():
-            conn=sqlite3.connect(DB)
-            try: conn.execute("INSERT INTO transports (name) VALUES (?)", (nt.strip(),)); conn.commit()
-            except: pass
-            conn.close(); st.rerun()
-    conn=sqlite3.connect(DB)
-    try: dft=pd.read_sql("SELECT name as Transport FROM transports ORDER BY name", conn)
-    except: dft=pd.DataFrame(columns=["Transport"])
-    conn.close()
-    st.dataframe(dft, width='stretch', height=400, hide_index=True)
+            try:
+                ws = get_gspread_sheet("TransportCo")
+                if ws:
+                    ids = ws.col_values(1)[1:]
+                    next_id = len([x for x in ids if x.strip() != ""]) + 1
+                    ws.append_row([next_id, nt.strip(), 0, 0, 0, ""], value_input_option='USER_ENTERED')
+                    st.cache_data.clear()
+                    st.success(f"Added {nt.strip()}")
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
+    
+    try:
+        ws = get_gspread_sheet("TransportCo")
+        if ws:
+            all_vals = ws.get_all_values()
+            if len(all_vals) > 1:
+                df_t = pd.DataFrame(all_vals[1:], columns=all_vals[0])
+            else:
+                df_t = pd.DataFrame(columns=["ID","COMPANY","TOTAL","PAY","BALANCE","NOTE"])
+        else:
+            df_t = pd.DataFrame(columns=["ID","COMPANY","TOTAL","PAY","BALANCE","NOTE"])
+    except:
+        df_t = pd.DataFrame(columns=["ID","COMPANY","TOTAL","PAY","BALANCE","NOTE"])
+    st.dataframe(df_t, width='stretch', height=400, hide_index=True)
 
 with c4:
     st.markdown("#### ✈️ Airlines")
     with st.form(key="f_air_final", clear_on_submit=True):
         nl=st.text_input("Airline name", placeholder="Airline name...", label_visibility="collapsed")
         if st.form_submit_button("Add Airline", width='stretch') and nl.strip():
-            conn=sqlite3.connect(DB)
-            try: conn.execute("INSERT INTO airlines (name) VALUES (?)", (nl.strip(),)); conn.commit()
-            except: pass
-            conn.close(); st.rerun()
-    conn=sqlite3.connect(DB)
-    try: dfa2=pd.read_sql("SELECT name as Airlines FROM airlines ORDER BY name", conn)
-    except: dfa2=pd.DataFrame(columns=["Airlines"])
+            try:
+                ws = get_gspread_sheet("Airlines") # اذا اسم شيت الطيران عندك AIRLINES بدلو هون
+                if ws:
+                    ids = ws.col_values(1)[1:]
+                    next_id = len([x for x in ids if x.strip() != ""]) + 1
+                    ws.append_row([next_id, nl.strip(), 0, 0, 0, ""], value_input_option='USER_ENTERED')
+                    st.cache_data.clear()
+                    st.success(f"Added {nl.strip()}")
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
+    
+    try:
+        ws = get_gspread_sheet("Airlines")
+        if ws:
+            all_vals = ws.get_all_values()
+            if len(all_vals) > 1:
+                dfa2 = pd.DataFrame(all_vals[1:], columns=all_vals[0])
+            else:
+                dfa2 = pd.DataFrame(columns=["ID","AIRLINE","TOTAL","PAY","BALANCE","NOTE"])
+        else:
+            dfa2 = pd.DataFrame(columns=["ID","AIRLINE","TOTAL","PAY","BALANCE","NOTE"])
+    except:
+        dfa2 = pd.DataFrame(columns=["ID","AIRLINE","TOTAL","PAY","BALANCE","NOTE"])
+    st.dataframe(dfa2, width='stretch', height=400, hide_index=True)
     conn.close()
     st.dataframe(dfa2, width='stretch', height=400, hide_index=True)
