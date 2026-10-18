@@ -131,9 +131,9 @@ with t1:
         
         pax_count_str = st.text_input("Passengers Count", value="1", key="pax_count_main")
         try:
-            pax_count = int(pax_count_str) if pax_count_str.strip() else 0
+            pax_count = int(pax_count_str) if pax_count_str.strip() else 1
         except:
-            pax_count = 0
+            pax_count = 1
         
         pax_names_list = []
         pas = ""
