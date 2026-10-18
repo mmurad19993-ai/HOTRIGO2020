@@ -530,7 +530,7 @@ with c4:
         nl=st.text_input("Airline name", placeholder="Airline name...", label_visibility="collapsed")
         if st.form_submit_button("Add Airline", width='stretch') and nl.strip():
             try:
-                ws = get_gspread_sheet("Airlines") # اذا اسم شيت الطيران عندك AIRLINES بدلو هون
+                ws = get_gspread_sheet("Airlines")
                 if ws:
                     ids = ws.col_values(1)[1:]
                     next_id = len([x for x in ids if x.strip() != ""]) + 1
@@ -545,10 +545,7 @@ with c4:
         ws = get_gspread_sheet("Airlines")
         if ws:
             all_vals = ws.get_all_values()
-            if len(all_vals) > 1:
-                dfa2 = pd.DataFrame(all_vals[1:], columns=all_vals[0])
-            else:
-                dfa2 = pd.DataFrame(columns=["ID","AIRLINE","TOTAL","PAY","BALANCE","NOTE"])
+            dfa2 = pd.DataFrame(all_vals[1:], columns=all_vals[0]) if len(all_vals) > 1 else pd.DataFrame(columns=["ID","AIRLINE","TOTAL","PAY","BALANCE","NOTE"])
         else:
             dfa2 = pd.DataFrame(columns=["ID","AIRLINE","TOTAL","PAY","BALANCE","NOTE"])
     except:
