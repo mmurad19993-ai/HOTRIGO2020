@@ -422,14 +422,30 @@ with c2:
     with st.form(key="f_hotels_final", clear_on_submit=True):
         nh=st.text_input("Hotel name", placeholder="Hotel name...", label_visibility="collapsed")
         if st.form_submit_button("Add Hotel", width='stretch') and nh.strip():
-            conn=sqlite3.connect(DB)
-            try: conn.execute("INSERT INTO hotels (name) VALUES (?)", (nh.strip(),)); conn.commit()
-            except: pass
-            conn.close(); st.rerun()
-    conn=sqlite3.connect(DB)
-    try: dfh=pd.read_sql("SELECT name as Hotels FROM hotels ORDER BY name", conn)
-    except: dfh=pd.DataFrame(columns=["Hotels"])
-    conn.close()
+            try:
+                ws = get_gspread_sheet("HOTELS")
+                if ws:
+                    # نفس طريقة الوكلاء - ID بالعمود A والاسم بالعمود B
+                    ids = ws.col_values(1)[1:]
+                    next_id = len([x for x in ids if x.strip() != ""]) + 1
+                    ws.append_row([next_id, nh.strip(), 0, 0, 0, ""], value_input_option='USER_ENTERED')
+                    st.cache_data.clear()
+                    st.success(f"Added {nh.strip()}")
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Error: {e}")
+    
+    # العرض من الدرايف مباشرة - مو من sqlite
+    try:
+        ws = get_gspread_sheet("HOTELS")
+        if ws:
+            vals = ws.col_values(2)[1:]  # العمود B = HOTELS متل الصورة
+            vals = [v for v in vals if v.strip() and not v.strip().isdigit()]
+            dfh = pd.DataFrame({"Hotels": vals})
+        else:
+            dfh = pd.DataFrame(columns=["Hotels"])
+    except:
+        dfh = pd.DataFrame(columns=["Hotels"])
     st.dataframe(dfh, width='stretch', height=400, hide_index=True)
 
 with c3:
