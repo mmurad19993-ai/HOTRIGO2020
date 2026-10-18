@@ -136,7 +136,7 @@ def confirm_sale_dialog(row_dict, new_row):
     if row_dict.get("Transport Co"): 
         st.write(f"**Transport:** {row_dict['Transport Co']}")
     st.divider()
-        c1,c2 = st.columns(2)
+    c1,c2 = st.columns(2)
     with c1:
         if st.button("✅ Confirm Save", type="primary", width='stretch', key="confirm_save_dialog"):
             ws=get_gspread_sheet()
