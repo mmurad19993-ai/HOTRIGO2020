@@ -339,6 +339,43 @@ with t1:
                             
                             new_row = [row_dict.get(h,"") for h in SHEET_HEADER]
                             ws.append_row(new_row, value_input_option='USER_ENTERED')
+
+                            # ===== صار الفنادق متل الوكلاء بالضبط - تحديث الرصيد =====
+                            # 1- تحديث Agents_Balance
+                            try:
+                                ws_a = get_gspread_sheet("Agents_Balance")
+                                if ws_a and comp.strip():
+                                    col_a = [x.strip().lower() for x in ws_a.col_values(2)]
+                                    if comp.strip().lower() in col_a:
+                                        r_a = col_a.index(comp.strip().lower()) + 1
+                                        cur = ws_a.cell(r_a, 3).value
+                                        cur = float(cur) if cur and str(cur).replace('.','',1).replace('-','').isdigit() else 0
+                                        new_t = cur + (sell if sell else 0)
+                                        ws_a.update_cell(r_a, 3, new_t)
+                                        pay = ws_a.cell(r_a, 4).value
+                                        pay = float(pay) if pay and str(pay).replace('.','',1).replace('-','').isdigit() else 0
+                                        ws_a.update_cell(r_a, 5, new_t - pay)
+                            except:
+                                pass
+                            # 2- تحديث HOTELS متل الوكلاء بالضبط مع ID
+                            try:
+                                ws_h = get_gspread_sheet("HOTELS")
+                                if ws_h and hotel.strip():
+                                    col_h = [x.strip().lower() for x in ws_h.col_values(2)]
+                                    if hotel.strip().lower() in col_h:
+                                        r_h = col_h.index(hotel.strip().lower()) + 1
+                                        cur_h = ws_h.cell(r_h, 3).value
+                                        cur_h = float(cur_h) if cur_h and str(cur_h).replace('.','',1).replace('-','').isdigit() else 0
+                                        # هون بزود سعر الفندق يلي كلفنا (hotel_total) - اذا بدك Sell غيرها ل hotel_total
+                                        new_t_h = cur_h + (hotel_total if hotel_total else 0)
+                                        ws_h.update_cell(r_h, 3, new_t_h)
+                                        pay_h = ws_h.cell(r_h, 4).value
+                                        pay_h = float(pay_h) if pay_h and str(pay_h).replace('.','',1).replace('-','').isdigit() else 0
+                                        ws_h.update_cell(r_h, 5, new_t_h - pay_h)
+                            except:
+                                pass
+                            # ===== نهاية تحديث الارصدة =====
+
                     st.success(f"✅ {row_dict['ID']} Saved") 
                     st.session_state.table_version+=1
                     st.session_state.show_more=False
