@@ -183,27 +183,8 @@ with t1:
         enable_arrow_enter()
         sd=st.date_input("Sale Date", datetime.now(), key="sd_main")
         emp=st.text_input("Sales Employee *", key="emp_main")
-
-@st.cache_data(ttl=5)
-def get_agents_from_drive():
-    try:
-        scope = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
-        client = gspread.authorize(creds)
-        sh = client.open("HOTRIGO_DATABASE")
-        ws = sh.worksheet("Agents_Balance")
-        vals = ws.get_all_values()
-        # اذا اول صف هو ID COPMANY...
-        if len(vals) > 1 and vals[0][0].upper() == "ID":
-            return [r[1].strip() for r in vals[1:] if len(r) > 1 and r[1].strip() != ""]
-        else:
-            return [r[1].strip() for r in vals if len(r) > 1]
-    except Exception as e:
-        return []
-
-agents_list = get_agents_from_drive()
-# الفنادق لسه من الدالة القديمة
-_, hotels_list = load_lists() if 'load_lists' in globals() else ([], [])
+        agents_list, hotels_list = load_lists()
+        airlines_list = load_list_sheet(st.session_state.table_version, "Airlines")
         transport_list = load_list_sheet(st.session_state.table_version, "TransportCo")
 
         comp=st.selectbox("Agent *", options=agents_list if agents_list else [""], key="comp_main")
