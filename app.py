@@ -364,16 +364,37 @@ with t3:
         with st.form(key="f_agents_final", clear_on_submit=True):
             na=st.text_input("Agent name", placeholder="Agent name...", label_visibility="collapsed")
             if st.form_submit_button("Add Agent", width='stretch') and na.strip():
-                conn=sqlite3.connect(DB)
-                try: conn.execute("INSERT INTO agents (name) VALUES (?)", (na.strip().upper(),)); conn.commit()
-                except: pass
-                conn.close(); st.rerun()
-        conn=sqlite3.connect(DB)
-        try: dfa=pd.read_sql("SELECT name as Agents FROM agents ORDER BY name", conn)
-        except: dfa=pd.DataFrame(columns=["Agents"])
-        conn.close()
-        st.dataframe(dfa, width='stretch', height=400, hide_index=True)
+                try:
+                    import gspread
+                    from google.oauth2.service_account import Credentials
+                    scope = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
+                    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+                    client = gspread.authorize(creds)
+                    ws = client.open("HOTRIGO_DATABASE").worksheet("Agents_balance")
+                    rows = ws.get_all_values()
+                    next_id = len(rows) + 1
+                    ws.append_row([next_id, na.strip().upper()])
+                    st.rerun()
+                except Exception as e:
+                    st.error(e)
+
+        # عرض من الدرايف - كل ما بتفتح الموقع بيرجع يسحبهم
+        try:
+            import gspread
+            from google.oauth2.service_account import Credentials
+            scope = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
+            creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+            client = gspread.authorize(creds)
+            ws = client.open("HOTRIGO_DATABASE").worksheet("Agents_balance")
+            vals = ws.get_all_values()
+            if vals:
+                dfa = pd.DataFrame(vals, columns=["ID", "Agents"])
+            else:
+                dfa = pd.DataFrame(columns=["ID", "Agents"])
+        except:
+            dfa = pd.DataFrame(columns=["ID", "Agents"])
         
+        st.dataframe(dfa, width='stretch', height=400, hide_index=True)
     with c2:
         st.markdown("#### 🏨 Hotels")
         with st.form(key="f_hotels_final", clear_on_submit=True):
