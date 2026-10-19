@@ -139,10 +139,7 @@ with t1:
         airlines_list = load_list_sql("Airlines", "Airline")
         transport_list = load_list_sql("TransportCo", "Company")
 
-        comp = st.text_input("Agent *", placeholder="", key="comp_main")
-        if comp.strip() and comp.strip() not in agents_list:
-            st.error(f"❌ '{comp}' مو موجود - اكتب الاسم صح متل ما هو بالقائمة")
-            st.stop()
+        comp = st.selectbox("Agent *", options=sorted(agents_list) if agents_list else [], placeholder="🔍 ابحث واختار الوكيل...", index=None, key="comp_main")
 
         pax_count_str = st.text_input("Passengers Count", value="1", key="pax_count_main")
         try:
