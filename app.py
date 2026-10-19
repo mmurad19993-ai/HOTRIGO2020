@@ -139,41 +139,10 @@ with t1:
         airlines_list = load_list_sql("Airlines", "Airline")
         transport_list = load_list_sql("TransportCo", "Company")
 
-        st.markdown("""
-        <style>
-        div[data-baseweb="select"] svg[title="Clear value"], div[data-baseweb="select"] div[aria-label="Clear value"], div[data-baseweb="select"] div[aria-label="Clear"] {display: none !important;}
-        </style>
-        """, unsafe_allow_html=True)
-        comp = st.selectbox("Agent *", options=sorted(agents_list) if agents_list else [], placeholder="", index=None, key="comp_main")
+        comp_options = [""] + sorted(agents_list) if agents_list else [""]
+        comp = st.selectbox("Agent *", options=comp_options, index=0, key="comp_main")
 
         pax_count_str = st.text_input("Passengers Count", value="1", key="pax_count_main")
-        try:
-            pax_count = int(pax_count_str) if pax_count_str.strip() else 1
-        except:
-            pax_count = 1
-        
-        pax_names_list = []
-        pas = ""
-        if pax_count > 0 and pax_count <= 30:
-            for i in range(int(pax_count)):
-                nm = st.text_input(f"Passenger {i+1}", key=f"pax_{i}_{st.session_state.table_version}")
-                if nm.strip():
-                    pax_names_list.append(nm.strip())
-            pas = "\n".join(pax_names_list)
-        elif pax_count > 30:
-            up = st.file_uploader("Upload Excel", type=["xlsx","xls","csv"], key="pax_excel_main")
-            if up is not None:
-                try:
-                    if up.name.lower().endswith(".csv"):
-                        df_up = pd.read_csv(up)
-                    else:
-                        df_up = pd.read_excel(up)
-                    pax_names_list = df_up.iloc[:,0].dropna().astype(str).map(lambda x: x.strip()).tolist()
-                    pax_names_list = [x for x in pax_names_list if x]
-                    pas = "\n".join(pax_names_list)
-                    pax_count = len(pax_names_list)
-                except Exception as e:
-                    st.error(f"{e}")
 
         hotel=st.selectbox("Hotel *", options=hotels_list if hotels_list else [""], key="hotel_main")
 
