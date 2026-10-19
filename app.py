@@ -120,12 +120,15 @@ def edit_dialog(row_id):
     e_pas=st.text_area("Passengers", value=d.get("Passengers",""), key=f"ep_{row_id}")
     e_hotel=st.text_input("Hotel", value=d.get("Hotel",""), key=f"eh_{row_id}")
     if st.button("Save", type="primary", key=f"es_{row_id}"):
+    if not e_comp or not str(e_comp).strip():
+        st.error("Agent is required")
+    else:
         conn = sqlite3.connect(DB)
-        conn.execute("UPDATE bookings SET Agent=?, Passengers=?, Hotel=? WHERE id=?", (e_comp, e_pas, e_hotel, row_id))
-        conn.commit(); conn.close()
-        st.session_state.table_version+=1
+        conn.execute("UPDATE bookings SET Agent=?, Passengers=?, Hotel=? WHERE id=?", (str(e_comp).strip(), str(e_pas).strip(), str(e_hotel).strip(), row_id))
+        conn.commit()
+        conn.close()
+        st.session_state.table_version += 1
         st.rerun()
-
 st.markdown("## ✈️ hotrigo | SQL - Server Ready ✅")
 t1,t2,t3=st.tabs(["Sales", "Account Statement", "Agents & Hotels"])
 
