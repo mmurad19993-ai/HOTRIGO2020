@@ -141,14 +141,10 @@ with t1:
 
         st.markdown("""
         <style>
-        .no-x-agent div[aria-label="Clear"] {display: none !important;}
-        .no-x-agent [data-testid="stSelectboxClearButton"] {display: none !important;}
-        .no-x-agent span[aria-label="clear"] {display: none !important;}
+        div[data-baseweb="select"] svg[title="Clear value"], div[data-baseweb="select"] div[aria-label="Clear value"], div[data-baseweb="select"] div[aria-label="Clear"] {display: none !important;}
         </style>
         """, unsafe_allow_html=True)
-        st.markdown('<div class="no-x-agent">', unsafe_allow_html=True)
         comp = st.selectbox("Agent *", options=sorted(agents_list) if agents_list else [], placeholder="", index=None, key="comp_main")
-        st.markdown('</div>', unsafe_allow_html=True)
 
         pax_count_str = st.text_input("Passengers Count", value="1", key="pax_count_main")
         try:
