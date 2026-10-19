@@ -3,15 +3,10 @@ import sqlite3
 from datetime import datetime, timedelta
 import pandas as pd
 import os, re, threading
-import gspread
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
 
 st.set_page_config(layout="wide", page_title="hotrigo")
-SHEET_ID_FALLBACK = "1WyJlLeChys_qh_qCxjFUZBq-FlhgHbhBaizMcg21Zqc"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(BASE_DIR, "hotrigo.db")
-SHEET_HEADER = ["ID","Agent","Passengers","Passengers Count","Hotel","Rooms","Room Type","Check-in","Nights","Check-out","Price Night","Hotel Total","Flight $","Transport $","Sell Price","Cost","Profit","Sale Date","Voucher No","Notes","Airline","Employee","Dep Time","Ret Time","Flight No Dep","Flight No Ret","Transport Co"]
 lock = threading.Lock()
 
 import streamlit.components.v1 as components
@@ -51,155 +46,91 @@ def to_f(v):
     try: return float(str(v).strip().replace(',', '').replace('$','') or 0)
     except: return 0.0
 
+def init_db():
+    conn = sqlite3.connect(DB, check_same_thread=False)
+    c = conn.cursor()
+    c.execute("""CREATE TABLE IF NOT EXISTS bookings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        Agent TEXT, Passengers TEXT, Passengers_Count INTEGER,
+        Hotel TEXT, Rooms INTEGER, Room_Type TEXT,
+        Checkin TEXT, Nights INTEGER, Checkout TEXT,
+        Price_Night REAL, Hotel_Total REAL, Flight REAL, Transport REAL,
+        Sell_Price REAL, Cost REAL, Profit REAL,
+        Sale_Date TEXT, Voucher_No TEXT, Notes TEXT,
+        Airline TEXT, Employee TEXT, Dep_Time TEXT, Ret_Time TEXT,
+        Flight_No_Dep TEXT, Flight_No_Ret TEXT, Transport_Co TEXT
+    )""")
+    c.execute("CREATE TABLE IF NOT EXISTS Agents_Balance (ID INTEGER PRIMARY KEY AUTOINCREMENT, Agent TEXT UNIQUE, Total REAL DEFAULT 0, Total_Pay REAL DEFAULT 0, Balance REAL DEFAULT 0, Note TEXT)")
+    c.execute("CREATE TABLE IF NOT EXISTS HOTELS (ID INTEGER PRIMARY KEY AUTOINCREMENT, Hotel TEXT UNIQUE, Total REAL DEFAULT 0, Total_Pay REAL DEFAULT 0, Balance REAL DEFAULT 0, Note TEXT)")
+    c.execute("CREATE TABLE IF NOT EXISTS Airlines (ID INTEGER PRIMARY KEY AUTOINCREMENT, Airline TEXT UNIQUE, Total REAL DEFAULT 0, Total_Pay REAL DEFAULT 0, Balance REAL DEFAULT 0, Note TEXT)")
+    c.execute("CREATE TABLE IF NOT EXISTS TransportCo (ID INTEGER PRIMARY KEY AUTOINCREMENT, Company TEXT UNIQUE, Total REAL DEFAULT 0, Total_Pay REAL DEFAULT 0, Balance REAL DEFAULT 0, Note TEXT)")
+    c.execute("CREATE TABLE IF NOT EXISTS Payments (ID INTEGER PRIMARY KEY AUTOINCREMENT, Date TEXT, Agent TEXT, Amount REAL, Note TEXT)")
+    # For compatibility with old code
+    c.execute("CREATE TABLE IF NOT EXISTS agents (name TEXT UNIQUE)")
+    c.execute("CREATE TABLE IF NOT EXISTS hotels (name TEXT UNIQUE)")
+    c.execute("CREATE TABLE IF NOT EXISTS airlines (name TEXT UNIQUE)")
+    c.execute("CREATE TABLE IF NOT EXISTS transport_companies (name TEXT UNIQUE)")
+    conn.commit()
+    conn.close()
+
+init_db()
+
 if "table_version" not in st.session_state:
     st.session_state.table_version = 0
 
-def get_sheet_id_clean():
-    raw = st.secrets.get("SHEET_ID", SHEET_ID_FALLBACK)
-    raw = str(raw).strip().strip('"').strip("'").strip()
-    m = re.search(r"/d/([a-zA-Z0-9-_]+)", raw)
-    if m:
-        return m.group(1)
-    return raw
-
-@st.cache_resource
-def get_gspread_client():
-    creds_info = dict(st.secrets["gcp_service_account"])
-    if "\\n" in creds_info.get("private_key",""):
-        creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
-    scopes = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
-    creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
-    return gspread.authorize(creds)
-
-@st.cache_resource
-def get_spreadsheet():
-    client = get_gspread_client()
-    sid = get_sheet_id_clean()
+def load_list_sql(table, col):
     try:
-        return client.open("HOTRIGO_DATABASE")
+        conn = sqlite3.connect(DB)
+        cur = conn.cursor()
+        # Map table names
+        if table == "Agents_Balance": t = "Agents_Balance"; c = "Agent"
+        elif table == "HOTELS": t = "HOTELS"; c = "Hotel"
+        elif table == "Airlines": t = "Airlines"; c = "Airline"
+        elif table == "TransportCo": t = "TransportCo"; c = "Company"
+        else: t = table; c = col
+        cur.execute(f"SELECT {c} FROM {t} WHERE {c} IS NOT NULL AND {c}!='' ORDER BY {c}")
+        rows = [r[0].strip() for r in cur.fetchall() if r[0] and r[0].strip()]
+        conn.close()
+        # dedup
+        seen=set(); clean=[]
+        for v in rows:
+            low=v.lower()
+            if low not in seen:
+                seen.add(low)
+                clean.append(v)
+        return clean
     except:
-        return client.open_by_key(sid)
-
-def get_gspread_sheet(worksheet_name=None):
-    try:
-        ss = get_spreadsheet()
-        if worksheet_name:
-            try: return ss.worksheet(worksheet_name)
-            except: return ss.add_worksheet(title=worksheet_name, rows=2000, cols=30)
-        return ss.sheet1
-    except Exception as e:
-        st.error(f"Sheet Error: {e}")
-        return None
-
-@st.cache_data(ttl=30)
-def load_list_sheet(_version, name):
-    try:
-        sheet_name = name
-        if name.lower() == "agents":
-            sheet_name = "Agents_Balance"
-        if name.lower() == "hotels":
-            sheet_name = "HOTELS"
-        if name.lower() == "airlines":
-            sheet_name = "Airlines"  # او AIRLINES - صورلي شو اسمو بالضبط
-        if "transport" in name.lower():
-            sheet_name = "TransportCo"  # هاد اسمك الصح من الصورة
-            
-        ws = get_gspread_sheet(sheet_name)
-        if not ws:
-            return []
-        
-        # هون كان الغلط - لازم يشمل الكل متل الوكلاء والفنادق
-        if "Agents" in sheet_name or "HOTELS" in sheet_name or "TransportCo" in sheet_name or "Airlines" in sheet_name or "AIRLINES" in sheet_name:
-            raw = [x.strip() for x in ws.col_values(2)[1:] if x.strip()]  # العمود B
-            clean = []
-            seen = set()
-            for v in raw:
-                if v.isdigit(): 
-                    continue
-                low = v.lower()
-                if low not in seen:
-                    seen.add(low)
-                    clean.append(v)
-            return clean
-        else:
-            return [x.strip() for x in ws.col_values(1)[1:] if x.strip()]
-    except Exception as e:
         return []
-def add_payment(tab_name, name_value, amount_val, note_val, note1_val):
-    try:
-        ws = get_gspread_sheet(tab_name)
-        if not ws: return False
-        ws.append_row([datetime.now().strftime("%Y-%m-%d"),str(name_value),float(amount_val)], value_input_option='USER_ENTERED')
-        return True
-    except: return False
 
 def load_lists():
-    try:
-        # هلا صار يقرا من الدرايف يلي فيه AHMAD - مو من sqlite
-        v = st.session_state.get("table_version", 0)
-        agents = load_list_sheet(v, "Agents")
-        hotels = load_list_sheet(v, "Hotels")
-        return agents, hotels
-    except: 
-        return [], []
-
-agents_for_js, hotels_for_js = load_lists()
+    v = st.session_state.get("table_version", 0)
+    agents = load_list_sql("Agents_Balance", "Agent")
+    hotels = load_list_sql("HOTELS", "Hotel")
+    return agents, hotels
 
 @st.dialog("Edit Booking")
-def edit_dialog(row):
-    sheet = get_gspread_sheet()
-    if not sheet: return
-    try:
-        all_vals = sheet.get_all_values()
-        header = all_vals[0]
-        d_row = all_vals[row-1]
-        d = {h: d_row[i] if i < len(d_row) else "" for i, h in enumerate(header)}
-    except: return
-    st.info(f"Editing #{row}")
-    e_comp=st.text_input("Agent", value=d.get("Agent",""), key=f"ec_{row}")
-    e_pas=st.text_area("Passengers", value=d.get("Passengers",""), key=f"ep_{row}")
-    e_hotel=st.text_input("Hotel", value=d.get("Hotel",""), key=f"eh_{row}")
-    if st.button("Save", type="primary", key=f"es_{row}"):
-        try:
-            new_row=[str(d.get(h,"")) for h in header]
-            if "Agent" in header: new_row[header.index("Agent")]=e_comp
-            if "Passengers" in header: new_row[header.index("Passengers")]=e_pas
-            if "Hotel" in header: new_row[header.index("Hotel")]=e_hotel
-            sheet.update(f"A{row}:ZZ{row}", [new_row], value_input_option="USER_ENTERED")
-            st.session_state.table_version+=1
-            st.rerun()
-        except Exception as e: st.error(str(e))
+def edit_dialog(row_id):
+    conn = sqlite3.connect(DB)
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM bookings WHERE id=?", (row_id,))
+    row = cur.fetchone()
+    cols = [d[0] for d in cur.description]
+    conn.close()
+    if not row: return
+    d = dict(zip(cols, row))
+    st.info(f"Editing #{row_id}")
+    e_comp=st.text_input("Agent", value=d.get("Agent",""), key=f"ec_{row_id}")
+    e_pas=st.text_area("Passengers", value=d.get("Passengers",""), key=f"ep_{row_id}")
+    e_hotel=st.text_input("Hotel", value=d.get("Hotel",""), key=f"eh_{row_id}")
+    if st.button("Save", type="primary", key=f"es_{row_id}"):
+        conn = sqlite3.connect(DB)
+        conn.execute("UPDATE bookings SET Agent=?, Passengers=?, Hotel=? WHERE id=?", (e_comp, e_pas, e_hotel, row_id))
+        conn.commit(); conn.close()
+        st.session_state.table_version+=1
+        st.rerun()
 
-st.markdown("## ✈️ hotrigo | Sheets Sync ✅")
+st.markdown("## ✈️ hotrigo | SQL - Server Ready ✅")
 t1,t2,t3=st.tabs(["Sales", "Account Statement", "Agents & Hotels"])
-
-@st.dialog("Confirm Sale")
-def confirm_sale_dialog(row_dict, new_row):
-    st.write(f"**Agent:** {row_dict['Agent']}")
-    st.write(f"**Hotel:** {row_dict['Hotel']} - {row_dict['Nights']} Nights")
-    st.write(f"**Passengers:** {row_dict['Passengers Count']}")
-    st.write(f"**Sell:** ${row_dict['Sell Price']} | **Cost:** ${row_dict['Cost']} | **Profit:** ${row_dict['Profit']}")
-    if row_dict.get("Voucher No"): st.write(f"**Voucher:** {row_dict['Voucher No']}")
-    if row_dict.get("Notes"): st.write(f"**Notes:** {row_dict['Notes']}")
-    if row_dict.get("Airline"): 
-        st.write(f"**Airline:** {row_dict['Airline']} | Dep: {row_dict['Dep Time']} Ret: {row_dict['Ret Time']}")
-    if row_dict.get("Flight No Dep"): 
-        st.write(f"**Flight:** {row_dict['Flight No Dep']} -> {row_dict['Flight No Ret']}")
-    if row_dict.get("Transport Co"): 
-        st.write(f"**Transport:** {row_dict['Transport Co']}")
-    st.divider()
-    c1,c2 = st.columns(2)
-    with c1:
-        if st.button("✅ Confirm Save", type="primary", width='stretch', key="confirm_save_dialog"):
-            ws=get_gspread_sheet()
-            ws.append_row(new_row, value_input_option='USER_ENTERED')
-            st.success(f"✅ {row_dict['ID']} Saved")
-            st.session_state.table_version+=1
-            st.session_state.show_more=False
-            st.rerun()
-    with c2:
-        if st.button("❌ Cancel", width='stretch', key="cancel_save_dialog"):
-            st.rerun()
 
 with t1:
     l,r=st.columns([1, 4.8])
@@ -208,8 +139,8 @@ with t1:
         sd=st.date_input("Sale Date", datetime.now(), key="sd_main")
         emp=st.text_input("Sales Employee *", key="emp_main")
         agents_list, hotels_list = load_lists()
-        airlines_list = load_list_sheet(st.session_state.table_version, "Airlines")
-        transport_list = load_list_sheet(st.session_state.table_version, "TransportCo")
+        airlines_list = load_list_sql("Airlines", "Airline")
+        transport_list = load_list_sql("TransportCo", "Company")
 
         comp=st.selectbox("Agent *", options=agents_list if agents_list else [""], key="comp_main")
         
@@ -221,13 +152,13 @@ with t1:
         
         pax_names_list = []
         pas = ""
-        if pax_count > 0 and pax_count <= 20:
+        if pax_count > 0 and pax_count <= 30:
             for i in range(int(pax_count)):
                 nm = st.text_input(f"Passenger {i+1}", key=f"pax_{i}_{st.session_state.table_version}")
                 if nm.strip():
                     pax_names_list.append(nm.strip())
             pas = "\n".join(pax_names_list)
-        elif pax_count > 20:
+        elif pax_count > 30:
             up = st.file_uploader("Upload Excel", type=["xlsx","xls","csv"], key="pax_excel_main")
             if up is not None:
                 try:
@@ -275,8 +206,7 @@ with t1:
         cost_val = hotel_total + flight_p + trans_p
 
         if cost_val > 0:
-            st.caption(f"فندق: ${hotel_total:.0f} | طيران: ${flight_p:.0f} | نقل: ${trans_p:.0f}")
-            st.caption(f"توتال الكوست علينا: ${cost_val:.0f}")
+            st.caption(f"Hotel: ${hotel_total:.0f} | Flight: ${flight_p:.0f} | Transport: ${trans_p:.0f} | Cost: ${cost_val:.0f}")
 
         note = st.text_input("Notes", key="note_main")
         voucher_no = st.text_input("Voucher No", key="voucher_main")
@@ -298,86 +228,41 @@ with t1:
         if st.button("SAVE SALE", type="primary", width='stretch', key="save_main"):
             if not comp.strip() or not hotel.strip() or not pas.strip(): 
                 st.error("Fill required")
-            elif st.session_state.show_more and airline_sel and airline_sel not in airlines_list:
-                st.error(f"Airline '{airline_sel}' مو معرفة! لازم تعرفها اول بشيت Airlines")
-            elif st.session_state.show_more and transport_co_sel and transport_co_sel not in transport_list:
-                st.error(f"Transport Co '{transport_co_sel}' مو معرفة! لازم تعرفها اول بشيت TransportCo")
             else:
                 try:
                     with lock:
-                        ws=get_gspread_sheet()
-                        if ws:
-                            row_dict = {h: "" for h in SHEET_HEADER}
-                            all_ids = ws.col_values(1)[1:]
-                            ids = [int(x) for x in all_ids if str(x).isdigit() and int(x) < 1000000]
-                            row_dict["ID"] = str(max(ids)+1 if ids else 1)
-                            row_dict["Agent"] = comp
-                            row_dict["Passengers"] = pas
-                            row_dict["Passengers Count"] = str(int(pax_count))
-                            row_dict["Hotel"] = hotel
-                            row_dict["Rooms"] = str(int(rooms_count))
-                            row_dict["Room Type"] = rooms_str
-                            row_dict["Check-in"] = ed.strftime("%Y-%m-%d")
-                            row_dict["Nights"] = str(nights_val)
-                            row_dict["Check-out"] = xd.strftime("%Y-%m-%d")
-                            row_dict["Price Night"] = str(pn) if pn else ""
-                            row_dict["Hotel Total"] = str(hotel_total) if hotel_total else ""
-                            row_dict["Flight $"] = str(flight_p) if flight_p else ""
-                            row_dict["Transport $"] = str(trans_p) if trans_p else ""
-                            row_dict["Sell Price"] = str(sell) if sell else ""
-                            row_dict["Cost"] = str(cost_val) if cost_val else ""
-                            row_dict["Profit"] = str(sell - cost_val) if sell else ""
-                            row_dict["Notes"] = note
-                            row_dict["Voucher No"] = voucher_no
-                            row_dict["Sale Date"] = sd.strftime("%Y-%m-%d")
-                            row_dict["Employee"] = emp
-                            row_dict["Airline"] = airline_sel if st.session_state.show_more else ""
-                            row_dict["Dep Time"] = dep_time if st.session_state.show_more else ""
-                            row_dict["Ret Time"] = ret_time if st.session_state.show_more else ""
-                            row_dict["Flight No Dep"] = flight_no_dep if st.session_state.show_more else ""
-                            row_dict["Flight No Ret"] = flight_no_ret if st.session_state.show_more else ""
-                            row_dict["Transport Co"] = transport_co_sel if st.session_state.show_more else ""
-                            
-                            new_row = [row_dict.get(h,"") for h in SHEET_HEADER]
-                            ws.append_row(new_row, value_input_option='USER_ENTERED')
+                        conn = sqlite3.connect(DB)
+                        cur = conn.cursor()
+                        cur.execute("""INSERT INTO bookings 
+                        (Agent, Passengers, Passengers_Count, Hotel, Rooms, Room_Type, Checkin, Nights, Checkout, Price_Night, Hotel_Total, Flight, Transport, Sell_Price, Cost, Profit, Sale_Date, Voucher_No, Notes, Airline, Employee, Dep_Time, Ret_Time, Flight_No_Dep, Flight_No_Ret, Transport_Co)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        (comp, pas, int(pax_count), hotel, int(rooms_count), rooms_str, ed.strftime("%Y-%m-%d"), nights_val, xd.strftime("%Y-%m-%d"), pn, hotel_total, flight_p, trans_p, sell, cost_val, sell-cost_val, sd.strftime("%Y-%m-%d"), voucher_no, note, airline_sel, emp, dep_time, ret_time, flight_no_dep, flight_no_ret, transport_co_sel))
+                        
+                        # Update Agents_Balance like before
+                        try:
+                            cur.execute("SELECT Total FROM Agents_Balance WHERE lower(Agent)=lower(?)", (comp.strip(),))
+                            r = cur.fetchone()
+                            if r:
+                                new_t = (r[0] or 0) + (sell or 0)
+                                cur.execute("UPDATE Agents_Balance SET Total=?, Balance=Total-Total_Pay WHERE lower(Agent)=lower(?)", (new_t, comp.strip()))
+                            else:
+                                # auto-create if not exists
+                                cur.execute("INSERT INTO Agents_Balance (Agent, Total, Balance) VALUES (?,?,?)", (comp.strip(), sell or 0, sell or 0))
+                        except: pass
+                        try:
+                            cur.execute("SELECT Total FROM HOTELS WHERE lower(Hotel)=lower(?)", (hotel.strip(),))
+                            r = cur.fetchone()
+                            if r:
+                                new_t = (r[0] or 0) + (hotel_total or 0)
+                                cur.execute("UPDATE HOTELS SET Total=?, Balance=Total-Total_Pay WHERE lower(Hotel)=lower(?)", (new_t, hotel.strip()))
+                            else:
+                                cur.execute("INSERT INTO HOTELS (Hotel, Total, Balance) VALUES (?,?,?)", (hotel.strip(), hotel_total or 0, hotel_total or 0))
+                        except: pass
 
-                            # ===== صار الفنادق متل الوكلاء بالضبط - تحديث الرصيد =====
-                            # 1- تحديث Agents_Balance
-                            try:
-                                ws_a = get_gspread_sheet("Agents_Balance")
-                                if ws_a and comp.strip():
-                                    col_a = [x.strip().lower() for x in ws_a.col_values(2)]
-                                    if comp.strip().lower() in col_a:
-                                        r_a = col_a.index(comp.strip().lower()) + 1
-                                        cur = ws_a.cell(r_a, 3).value
-                                        cur = float(cur) if cur and str(cur).replace('.','',1).replace('-','').isdigit() else 0
-                                        new_t = cur + (sell if sell else 0)
-                                        ws_a.update_cell(r_a, 3, new_t)
-                                        pay = ws_a.cell(r_a, 4).value
-                                        pay = float(pay) if pay and str(pay).replace('.','',1).replace('-','').isdigit() else 0
-                                        ws_a.update_cell(r_a, 5, new_t - pay)
-                            except:
-                                pass
-                            # 2- تحديث HOTELS متل الوكلاء بالضبط مع ID
-                            try:
-                                ws_h = get_gspread_sheet("HOTELS")
-                                if ws_h and hotel.strip():
-                                    col_h = [x.strip().lower() for x in ws_h.col_values(2)]
-                                    if hotel.strip().lower() in col_h:
-                                        r_h = col_h.index(hotel.strip().lower()) + 1
-                                        cur_h = ws_h.cell(r_h, 3).value
-                                        cur_h = float(cur_h) if cur_h and str(cur_h).replace('.','',1).replace('-','').isdigit() else 0
-                                        # هون بزود سعر الفندق يلي كلفنا (hotel_total) - اذا بدك Sell غيرها ل hotel_total
-                                        new_t_h = cur_h + (hotel_total if hotel_total else 0)
-                                        ws_h.update_cell(r_h, 3, new_t_h)
-                                        pay_h = ws_h.cell(r_h, 4).value
-                                        pay_h = float(pay_h) if pay_h and str(pay_h).replace('.','',1).replace('-','').isdigit() else 0
-                                        ws_h.update_cell(r_h, 5, new_t_h - pay_h)
-                            except:
-                                pass
-                            # ===== نهاية تحديث الارصدة =====
-
-                    st.success(f"✅ {row_dict['ID']} Saved") 
+                        conn.commit()
+                        last_id = cur.lastrowid
+                        conn.close()
+                    st.success(f"✅ {last_id} Saved - {len(pax_names_list)} Passengers") 
                     st.session_state.table_version+=1
                     st.session_state.show_more=False
                     st.rerun()
@@ -385,169 +270,106 @@ with t1:
 
     with r:
         search_val=st.text_input("Search", placeholder="Search...", key="search_main")
-        sheet=get_gspread_sheet()
-        if not sheet: st.error("Sheet not connected"); st.stop()
-        all_vals=sheet.get_all_values()
-        if len(all_vals)<2: df_raw=pd.DataFrame()
-        else:
-            header=all_vals[0]; rows=all_vals[1:]
-            df_raw=pd.DataFrame([r + [""]*(len(header)-len(r)) for r in rows], columns=header)
-            df_raw["_sheet_row"]=[i+2 for i in range(len(df_raw))]
-            if search_val.strip():
-                s=search_val.lower()
-                df_raw=df_raw[df_raw.apply(lambda row: s in str(row.values).lower(), axis=1)]
-        event=st.dataframe(df_raw.drop(columns=["_sheet_row"], errors='ignore') if not df_raw.empty else df_raw, width='stretch', height=650, hide_index=True, on_select="rerun", selection_mode="multi-row", key=f"main_table_{st.session_state.table_version}")
+        conn = sqlite3.connect(DB)
+        try:
+            df_raw = pd.read_sql("SELECT * FROM bookings ORDER BY id DESC", conn)
+        except:
+            df_raw = pd.DataFrame()
+        conn.close()
+        if not df_raw.empty and search_val.strip():
+            s=search_val.lower()
+            df_raw=df_raw[df_raw.apply(lambda row: s in str(row.values).lower(), axis=1)]
+        event=st.dataframe(df_raw, width='stretch', height=650, hide_index=True, on_select="rerun", selection_mode="multi-row", key=f"main_table_{st.session_state.table_version}")
         st.markdown(f"**Total: {len(df_raw)}**")
         selected_rows=event.selection.rows if hasattr(event, 'selection') else []
-        selected_ids=df_raw.iloc[selected_rows]["_sheet_row"].tolist() if selected_rows and not df_raw.empty else []
+        selected_ids=[int(df_raw.iloc[i]["id"]) for i in selected_rows] if selected_rows and not df_raw.empty else []
         if st.button("Edit", width='stretch', key="edit_main"):
-            if len(selected_ids)!=1: st.error("حدد سطر واحد")
+            if len(selected_ids)!=1: st.error("Select one row")
             else: edit_dialog(int(selected_ids[0]))
+
 with t2:
     st.markdown("### 💰 Payments")
     try:
-        ws=get_gspread_sheet("Payments")
-        df=pd.DataFrame(ws.get_all_records()) if ws else pd.DataFrame()
+        conn = sqlite3.connect(DB)
+        df = pd.read_sql("SELECT * FROM Payments ORDER BY id DESC", conn)
+        conn.close()
         st.dataframe(df, width='stretch')
     except Exception as e: st.error(f"{e}")
 
 with t3:
-    conn=sqlite3.connect(DB)
-    conn.execute("CREATE TABLE IF NOT EXISTS agents (name TEXT PRIMARY KEY)")
-    conn.execute("CREATE TABLE IF NOT EXISTS hotels (name TEXT PRIMARY KEY)")
-    conn.execute("CREATE TABLE IF NOT EXISTS transports (name TEXT PRIMARY KEY)")
-    conn.execute("CREATE TABLE IF NOT EXISTS airlines (name TEXT PRIMARY KEY)")
-    conn.commit(); conn.close()
-    
     c1,c2,c3,c4=st.columns(4)
+    with c1:
+        st.markdown("#### 👥 Agents")
+        with st.form(key="f_agents_final", clear_on_submit=True):
+            na=st.text_input("Agent name", placeholder="Agent name...", label_visibility="collapsed")
+            if st.form_submit_button("Add Agent", width='stretch') and na.strip():
+                conn = sqlite3.connect(DB)
+                conn.execute("INSERT OR IGNORE INTO Agents_Balance (Agent, Total, Total_Pay, Balance) VALUES (?,?,?,?)", (na.strip().upper(), 0,0,0))
+                conn.execute("INSERT OR IGNORE INTO agents (name) VALUES (?)", (na.strip().upper(),))
+                conn.commit(); conn.close()
+                st.session_state.table_version+=1
+                st.rerun()
+        try:
+            conn = sqlite3.connect(DB)
+            dfa = pd.read_sql("SELECT * FROM Agents_Balance ORDER BY Agent", conn)
+            conn.close()
+        except:
+            dfa = pd.DataFrame(columns=["ID", "Agent"])
+        st.dataframe(dfa, width='stretch', height=400, hide_index=True)
 
-with c1:
-    st.markdown("#### 👥 Agents")
+    with c2:
+        st.markdown("#### 🏨 Hotels")
+        with st.form(key="f_hotels_final", clear_on_submit=True):
+            nh=st.text_input("Hotel name", placeholder="Hotel name...", label_visibility="collapsed")
+            if st.form_submit_button("Add Hotel", width='stretch') and nh.strip():
+                conn = sqlite3.connect(DB)
+                conn.execute("INSERT OR IGNORE INTO HOTELS (Hotel, Total, Total_Pay, Balance) VALUES (?,?,?,?)", (nh.strip().upper(), 0,0,0))
+                conn.execute("INSERT OR IGNORE INTO hotels (name) VALUES (?)", (nh.strip().upper(),))
+                conn.commit(); conn.close()
+                st.session_state.table_version+=1
+                st.rerun()
+        try:
+            conn = sqlite3.connect(DB)
+            dfh = pd.read_sql("SELECT * FROM HOTELS ORDER BY Hotel", conn)
+            conn.close()
+        except:
+            dfh = pd.DataFrame(columns=["ID","Hotel"])
+        st.dataframe(dfh, width='stretch', height=400, hide_index=True)
 
-    import gspread
-    from google.oauth2.service_account import Credentials
+    with c3:
+        st.markdown("#### 🚌 Transport")
+        with st.form(key="f_trans_final", clear_on_submit=True):
+            nt=st.text_input("Transport name", placeholder="Transport company...", label_visibility="collapsed")
+            if st.form_submit_button("Add Transport", width='stretch') and nt.strip():
+                conn = sqlite3.connect(DB)
+                conn.execute("INSERT OR IGNORE INTO TransportCo (Company) VALUES (?)", (nt.strip().upper(),))
+                conn.execute("INSERT OR IGNORE INTO transport_companies (name) VALUES (?)", (nt.strip().upper(),))
+                conn.commit(); conn.close()
+                st.session_state.table_version+=1
+                st.rerun()
+        try:
+            conn = sqlite3.connect(DB)
+            df_t = pd.read_sql("SELECT * FROM TransportCo ORDER BY Company", conn)
+            conn.close()
+        except:
+            df_t = pd.DataFrame(columns=["ID","Company"])
+        st.dataframe(df_t, width='stretch', height=400, hide_index=True)
 
-    @st.cache_resource
-    def get_agents_ws():
-        scope = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
-        client = gspread.authorize(creds)
-        sh = client.open("HOTRIGO_DATABASE")
-        return sh.worksheet("Agents_Balance")
-
-    with st.form(key="f_agents_final", clear_on_submit=True):
-        na=st.text_input("Agent name", placeholder="Agent name...", label_visibility="collapsed")
-        if st.form_submit_button("Add Agent", width='stretch') and na.strip():
-            ws = get_agents_ws()
-            rows = ws.get_all_values()
-            if rows and rows[0][0].upper() == "ID":
-                next_id = len(rows)
-            else:
-                next_id = len(rows) + 1
-            ws.append_row([next_id, na.strip().upper(), 0, 0, 0, ""])
-            st.rerun()
-
-    ws = get_agents_ws()
-    vals = ws.get_all_values()
-    if len(vals) > 1:
-        dfa = pd.DataFrame(vals[1:], columns=vals[0])
-    else:
-        dfa = pd.DataFrame(columns=["ID", "Agents"])
-    st.dataframe(dfa, width='stretch', height=400, hide_index=True)
-
-with c2:
-    st.markdown("#### 🏨 Hotels")
-    with st.form(key="f_hotels_final", clear_on_submit=True):
-        nh=st.text_input("Hotel name", placeholder="Hotel name...", label_visibility="collapsed")
-        if st.form_submit_button("Add Hotel", width='stretch') and nh.strip():
-            try:
-                ws = get_gspread_sheet("HOTELS")
-                if ws:
-                    # نفس طريقة الوكلاء - ID بالعمود A والاسم بالعمود B
-                    ids = ws.col_values(1)[1:]
-                    next_id = len([x for x in ids if x.strip() != ""]) + 1
-                    ws.append_row([next_id, nh.strip(), 0, 0, 0, ""], value_input_option='USER_ENTERED')
-                    st.cache_data.clear()
-                    st.success(f"Added {nh.strip()}")
-                    st.rerun()
-            except Exception as e:
-                st.error(f"Error: {e}")
-    
-    # العرض من الدرايف مباشرة - صار متل الوكلاء تماما ID | HOTELS | TOTAL | TOTAL_PAY | BALANCE | NOTE
-    try:
-        ws = get_gspread_sheet("HOTELS")
-        if ws:
-            all_vals = ws.get_all_values()
-            if len(all_vals) > 1:
-                # ناخذ اول سطر ك هيدر وباقي الاسطر ك داتا
-                header = all_vals[0]
-                rows = all_vals[1:]
-                dfh = pd.DataFrame(rows, columns=header)
-                # تنظيف الاعمدة الفاضية
-                dfh = dfh.loc[:, dfh.columns.str.strip() != ""]
-            else:
-                dfh = pd.DataFrame(columns=["ID","HOTELS","TOTAL","TOTAL_PAY","BALANCE","NOTE"])
-        else:
-            dfh = pd.DataFrame(columns=["ID","HOTELS","TOTAL","TOTAL_PAY","BALANCE","NOTE"])
-    except Exception as e:
-        dfh = pd.DataFrame(columns=["ID","HOTELS","TOTAL","TOTAL_PAY","BALANCE","NOTE"])
-    st.dataframe(dfh, width='stretch', height=400, hide_index=True)
-
-with c3:
-    st.markdown("#### 🚌 Transport")
-    with st.form(key="f_trans_final", clear_on_submit=True):
-        nt=st.text_input("Transport name", placeholder="Transport company...", label_visibility="collapsed")
-        if st.form_submit_button("Add Transport", width='stretch') and nt.strip():
-            try:
-                ws = get_gspread_sheet("TransportCo")
-                if ws:
-                    ids = ws.col_values(1)[1:]
-                    next_id = len([x for x in ids if x.strip() != ""]) + 1
-                    ws.append_row([next_id, nt.strip(), 0, 0, 0, ""], value_input_option='USER_ENTERED')
-                    st.cache_data.clear()
-                    st.success(f"Added {nt.strip()}")
-                    st.rerun()
-            except Exception as e:
-                st.error(f"Error: {e}")
-    
-    try:
-        ws = get_gspread_sheet("TransportCo")
-        if ws:
-            all_vals = ws.get_all_values()
-            if len(all_vals) > 1:
-                df_t = pd.DataFrame(all_vals[1:], columns=all_vals[0])
-            else:
-                df_t = pd.DataFrame(columns=["ID","COMPANY","TOTAL","PAY","BALANCE","NOTE"])
-        else:
-            df_t = pd.DataFrame(columns=["ID","COMPANY","TOTAL","PAY","BALANCE","NOTE"])
-    except:
-        df_t = pd.DataFrame(columns=["ID","COMPANY","TOTAL","PAY","BALANCE","NOTE"])
-    st.dataframe(df_t, width='stretch', height=400, hide_index=True)
-
-with c4:
-    st.markdown("#### ✈️ Airlines")
-    with st.form(key="f_air_final", clear_on_submit=True):
-        nl=st.text_input("Airline name", placeholder="Airline name...", label_visibility="collapsed")
-        if st.form_submit_button("Add Airline", width='stretch') and nl.strip():
-            try:
-                ws = get_gspread_sheet("Airlines")
-                if ws:
-                    ids = ws.col_values(1)[1:]
-                    next_id = len([x for x in ids if x.strip() != ""]) + 1
-                    ws.append_row([next_id, nl.strip(), 0, 0, 0, ""], value_input_option='USER_ENTERED')
-                    st.cache_data.clear()
-                    st.success(f"Added {nl.strip()}")
-                    st.rerun()
-            except Exception as e:
-                st.error(f"Error: {e}")
-    
-    try:
-        ws = get_gspread_sheet("Airlines")
-        if ws:
-            all_vals = ws.get_all_values()
-            dfa2 = pd.DataFrame(all_vals[1:], columns=all_vals[0]) if len(all_vals) > 1 else pd.DataFrame(columns=["ID","AIRLINE","TOTAL","PAY","BALANCE","NOTE"])
-        else:
-            dfa2 = pd.DataFrame(columns=["ID","AIRLINE","TOTAL","PAY","BALANCE","NOTE"])
-    except:
-        dfa2 = pd.DataFrame(columns=["ID","AIRLINE","TOTAL","PAY","BALANCE","NOTE"])
-    st.dataframe(dfa2, width='stretch', height=400, hide_index=True)
+    with c4:
+        st.markdown("#### ✈️ Airlines")
+        with st.form(key="f_air_final", clear_on_submit=True):
+            nl=st.text_input("Airline name", placeholder="Airline name...", label_visibility="collapsed")
+            if st.form_submit_button("Add Airline", width='stretch') and nl.strip():
+                conn = sqlite3.connect(DB)
+                conn.execute("INSERT OR IGNORE INTO Airlines (Airline) VALUES (?)", (nl.strip().upper(),))
+                conn.execute("INSERT OR IGNORE INTO airlines (name) VALUES (?)", (nl.strip().upper(),))
+                conn.commit(); conn.close()
+                st.session_state.table_version+=1
+                st.rerun()
+        try:
+            conn = sqlite3.connect(DB)
+            dfa2 = pd.read_sql("SELECT * FROM Airlines ORDER BY Airline", conn)
+            conn.close()
+        except:
+            dfa2 = pd.DataFrame(columns=["ID","Airline"])
+        st.dataframe(dfa2, width='stretch', height=400, hide_index=True)
