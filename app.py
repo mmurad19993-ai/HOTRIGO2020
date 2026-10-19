@@ -206,7 +206,7 @@ with t1:
                 flight_no_ret = st.text_input("Airport Ret / Flight No Ret", key="flight_no_ret_more")
         
         if st.button("SAVE SALE", type="primary", width='stretch', key="save_main"):
-            if not comp or not str(comp).strip() or not hotel or not str(hotel).strip() or not pas or not str(pas).strip(): 
+            if not comp or not str(comp).strip() or not hotel or not str(hotel).strip() or not pas or not str(pas).strip():
                 st.error("Fill required")
             else:
                 try:
@@ -226,7 +226,8 @@ with t1:
                                 cur.execute("UPDATE Agents_Balance SET Total=?, Balance=Total-Total_Pay WHERE lower(Agent)=lower(?)", (new_t, comp.strip()))
                             else:
                                 cur.execute("INSERT INTO Agents_Balance (Agent, Total, Balance) VALUES (?,?,?)", (comp.strip(), sell or 0, sell or 0))
-                        except: pass
+                        except:
+                            pass
                         try:
                             cur.execute("SELECT Total FROM HOTELS WHERE lower(Hotel)=lower(?)", (hotel.strip(),))
                             r = cur.fetchone()
@@ -235,16 +236,18 @@ with t1:
                                 cur.execute("UPDATE HOTELS SET Total=?, Balance=Total-Total_Pay WHERE lower(Hotel)=lower(?)", (new_t, hotel.strip()))
                             else:
                                 cur.execute("INSERT INTO HOTELS (Hotel, Total, Balance) VALUES (?,?,?)", (hotel.strip(), hotel_total or 0, hotel_total or 0))
-                        except: pass
+                        except:
+                            pass
 
                         conn.commit()
                         last_id = cur.lastrowid
                         conn.close()
-                    st.success(f"✅ {last_id} Saved - {len(pax_names_list)} Passengers") 
-                    st.session_state.table_version+=1
-                    st.session_state.show_more=False
+                    st.success(f"✅ {last_id} Saved - {len(pax_names_list)} Passengers")
+                    st.session_state.table_version += 1
+                    st.session_state.show_more = False
                     st.rerun()
-                except Exception as e: st.error(f"{e}")
+                except Exception as e:
+                    st.error(f"{e}")
 
     with r:
         search_val=st.text_input("Search", placeholder="Search...", key="search_main")
