@@ -223,8 +223,9 @@ with t1:
                 flight_no_ret = st.text_input("Airport Ret / Flight No Ret", key="flight_no_ret_more")
         
         if st.button("SAVE SALE", type="primary", width='stretch', key="save_main"):
-            if not comp.strip() or not hotel.strip() or not pas.strip(): 
+            if not comp or not str(comp).strip() or not hotel or not str(hotel).strip() or not pas or not str(pas).strip(): 
                 st.error("Fill required")
+                st.stop()
             else:
                 try:
                     with lock:
