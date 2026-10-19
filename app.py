@@ -313,16 +313,15 @@ with t3:
             dfa = pd.DataFrame(columns=["ID", "Agent"])
         st.dataframe(dfa, width='stretch', height=400, hide_index=True)
 
-    with c2:
+   with c2:
         st.markdown("#### 🏨 Hotels")
         with st.form(key="f_hotels_final", clear_on_submit=True):
-            nh=st.text_input("Hotel name", placeholder="Hotel name...", label_visibility="collapsed")
+            nh=st.text_input("Hotel name", placeholder="فندق الشام... عربي", label_visibility="collapsed")
             if st.form_submit_button("Add Hotel", width='stretch') and nh.strip():
                 conn = sqlite3.connect(DB)
-                # تم التعديل هنا فقط - صار يقبل العربي
                 conn.execute("INSERT OR IGNORE INTO HOTELS (Hotel, Total, Total_Pay, Balance) VALUES (?,?,?,?)", (nh.strip(), 0,0,0))
-                conn.execute("INSERT OR IGNORE INTO hotels (name) VALUES (?)", (nh.strip(),))
-                conn.commit(); conn.close()
+                conn.commit()
+                conn.close()
                 st.session_state.table_version+=1
                 st.rerun()
         try:
