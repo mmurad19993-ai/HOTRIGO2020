@@ -313,10 +313,10 @@ with t3:
             dfa = pd.DataFrame(columns=["ID", "Agent"])
         st.dataframe(dfa, width='stretch', height=400, hide_index=True)
 
-   with c2:
+       with c2:
         st.markdown("#### 🏨 Hotels")
         with st.form(key="f_hotels_final", clear_on_submit=True):
-            nh=st.text_input("Hotel name", placeholder="فندق الشام... عربي", label_visibility="collapsed")
+            nh=st.text_input("Hotel name", placeholder="فندق الشام / Hotel...", label_visibility="collapsed")
             if st.form_submit_button("Add Hotel", width='stretch') and nh.strip():
                 conn = sqlite3.connect(DB)
                 conn.execute("INSERT OR IGNORE INTO HOTELS (Hotel, Total, Total_Pay, Balance) VALUES (?,?,?,?)", (nh.strip(), 0,0,0))
@@ -335,13 +335,12 @@ with t3:
     with c3:
         st.markdown("#### 🚌 Transport")
         with st.form(key="f_trans_final", clear_on_submit=True):
-            nt=st.text_input("Transport name", placeholder="Transport company...", label_visibility="collapsed")
+            nt=st.text_input("Transport name", placeholder="شركة النقل / Transport...", label_visibility="collapsed")
             if st.form_submit_button("Add Transport", width='stretch') and nt.strip():
                 conn = sqlite3.connect(DB)
-                # تم التعديل هنا فقط - صار يقبل العربي
                 conn.execute("INSERT OR IGNORE INTO TransportCo (Company) VALUES (?)", (nt.strip(),))
-                conn.execute("INSERT OR IGNORE INTO transport_companies (name) VALUES (?)", (nt.strip(),))
-                conn.commit(); conn.close()
+                conn.commit()
+                conn.close()
                 st.session_state.table_version+=1
                 st.rerun()
         try:
@@ -355,13 +354,12 @@ with t3:
     with c4:
         st.markdown("#### ✈️ Airlines")
         with st.form(key="f_air_final", clear_on_submit=True):
-            nl=st.text_input("Airline name", placeholder="Airline name...", label_visibility="collapsed")
+            nl=st.text_input("Airline name", placeholder="الخطوط / Airlines...", label_visibility="collapsed")
             if st.form_submit_button("Add Airline", width='stretch') and nl.strip():
                 conn = sqlite3.connect(DB)
-                # تم التعديل هنا فقط - صار يقبل العربي
                 conn.execute("INSERT OR IGNORE INTO Airlines (Airline) VALUES (?)", (nl.strip(),))
-                conn.execute("INSERT OR IGNORE INTO airlines (name) VALUES (?)", (nl.strip(),))
-                conn.commit(); conn.close()
+                conn.commit()
+                conn.close()
                 st.session_state.table_version+=1
                 st.rerun()
         try:
