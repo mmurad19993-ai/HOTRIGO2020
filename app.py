@@ -225,7 +225,6 @@ with t1:
         if st.button("SAVE SALE", type="primary", width='stretch', key="save_main"):
             if not comp or not str(comp).strip() or not hotel or not str(hotel).strip() or not pas or not str(pas).strip(): 
                 st.error("Fill required")
-                st.stop()
             else:
                 try:
                     with lock:
