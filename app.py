@@ -297,7 +297,7 @@ with t3:
     with c1:
         st.markdown("#### 👥 Agents")
         with st.form(key="f_agents_final", clear_on_submit=True):
-            na = st.text_input("Agent name", placeholder="مكتب دمشق...", label_visibility="collapsed")
+            na = st.text_input("Agent name", placeholder="", label_visibility="collapsed")
             if st.form_submit_button("Add Agent", width='stretch') and na.strip():
                 conn = sqlite3.connect(DB)
                 conn.execute("INSERT OR IGNORE INTO Agents_Balance (Agent, Total, Total_Pay, Balance) VALUES (?,?,?,?)", (na.strip(), 0, 0, 0))
@@ -316,7 +316,7 @@ with t3:
     with c2:
         st.markdown("#### 🏨 Hotels")
         with st.form(key="f_hotels_final", clear_on_submit=True):
-            nh = st.text_input("Hotel name", placeholder="فندق الشام...", label_visibility="collapsed")
+            nh = st.text_input("Hotel name", placeholder="", label_visibility="collapsed")
             if st.form_submit_button("Add Hotel", width='stretch') and nh.strip():
                 conn = sqlite3.connect(DB)
                 conn.execute("INSERT OR IGNORE INTO HOTELS (Hotel, Total, Total_Pay, Balance) VALUES (?,?,?,?)", (nh.strip(), 0, 0, 0))
@@ -335,7 +335,7 @@ with t3:
     with c3:
         st.markdown("#### 🚌 Transport")
         with st.form(key="f_trans_final", clear_on_submit=True):
-            nt = st.text_input("Transport name", placeholder="شركة النقل...", label_visibility="collapsed")
+            nt = st.text_input("Transport name", placeholder="", label_visibility="collapsed")
             if st.form_submit_button("Add Transport", width='stretch') and nt.strip():
                 conn = sqlite3.connect(DB)
                 conn.execute("INSERT OR IGNORE INTO TransportCo (Company) VALUES (?)", (nt.strip(),))
@@ -354,7 +354,7 @@ with t3:
     with c4:
         st.markdown("#### ✈️ Airlines")
         with st.form(key="f_air_final", clear_on_submit=True):
-            nl = st.text_input("Airline name", placeholder="الخطوط...", label_visibility="collapsed")
+            nl = st.text_input("Airline name", placeholder="", label_visibility="collapsed")
             if st.form_submit_button("Add Airline", width='stretch') and nl.strip():
                 conn = sqlite3.connect(DB)
                 conn.execute("INSERT OR IGNORE INTO Airlines (Airline) VALUES (?)", (nl.strip(),))
