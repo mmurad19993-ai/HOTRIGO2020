@@ -292,18 +292,18 @@ with t2:
     except Exception as e: st.error(f"{e}")
 
 with t3:
-    c1,c2,c3,c4=st.columns(4)
+    c1, c2, c3, c4 = st.columns(4)
+
     with c1:
         st.markdown("#### 👥 Agents")
         with st.form(key="f_agents_final", clear_on_submit=True):
-            na=st.text_input("Agent name", placeholder="Agent name...", label_visibility="collapsed")
+            na = st.text_input("Agent name", placeholder="مكتب دمشق...", label_visibility="collapsed")
             if st.form_submit_button("Add Agent", width='stretch') and na.strip():
                 conn = sqlite3.connect(DB)
-                # تم التعديل هنا فقط - صار يقبل العربي
-                conn.execute("INSERT OR IGNORE INTO Agents_Balance (Agent, Total, Total_Pay, Balance) VALUES (?,?,?,?)", (na.strip(), 0,0,0))
-                conn.execute("INSERT OR IGNORE INTO agents (name) VALUES (?)", (na.strip(),))
-                conn.commit(); conn.close()
-                st.session_state.table_version+=1
+                conn.execute("INSERT OR IGNORE INTO Agents_Balance (Agent, Total, Total_Pay, Balance) VALUES (?,?,?,?)", (na.strip(), 0, 0, 0))
+                conn.commit()
+                conn.close()
+                st.session_state.table_version += 1
                 st.rerun()
         try:
             conn = sqlite3.connect(DB)
@@ -313,59 +313,59 @@ with t3:
             dfa = pd.DataFrame(columns=["ID", "Agent"])
         st.dataframe(dfa, width='stretch', height=400, hide_index=True)
 
-       with c2:
+    with c2:
         st.markdown("#### 🏨 Hotels")
         with st.form(key="f_hotels_final", clear_on_submit=True):
-            nh=st.text_input("Hotel name", placeholder="فندق الشام / Hotel...", label_visibility="collapsed")
+            nh = st.text_input("Hotel name", placeholder="فندق الشام...", label_visibility="collapsed")
             if st.form_submit_button("Add Hotel", width='stretch') and nh.strip():
                 conn = sqlite3.connect(DB)
-                conn.execute("INSERT OR IGNORE INTO HOTELS (Hotel, Total, Total_Pay, Balance) VALUES (?,?,?,?)", (nh.strip(), 0,0,0))
+                conn.execute("INSERT OR IGNORE INTO HOTELS (Hotel, Total, Total_Pay, Balance) VALUES (?,?,?,?)", (nh.strip(), 0, 0, 0))
                 conn.commit()
                 conn.close()
-                st.session_state.table_version+=1
+                st.session_state.table_version += 1
                 st.rerun()
         try:
             conn = sqlite3.connect(DB)
             dfh = pd.read_sql("SELECT * FROM HOTELS ORDER BY Hotel", conn)
             conn.close()
         except:
-            dfh = pd.DataFrame(columns=["ID","Hotel"])
+            dfh = pd.DataFrame(columns=["ID", "Hotel"])
         st.dataframe(dfh, width='stretch', height=400, hide_index=True)
 
     with c3:
         st.markdown("#### 🚌 Transport")
         with st.form(key="f_trans_final", clear_on_submit=True):
-            nt=st.text_input("Transport name", placeholder="شركة النقل / Transport...", label_visibility="collapsed")
+            nt = st.text_input("Transport name", placeholder="شركة النقل...", label_visibility="collapsed")
             if st.form_submit_button("Add Transport", width='stretch') and nt.strip():
                 conn = sqlite3.connect(DB)
                 conn.execute("INSERT OR IGNORE INTO TransportCo (Company) VALUES (?)", (nt.strip(),))
                 conn.commit()
                 conn.close()
-                st.session_state.table_version+=1
+                st.session_state.table_version += 1
                 st.rerun()
         try:
             conn = sqlite3.connect(DB)
             df_t = pd.read_sql("SELECT * FROM TransportCo ORDER BY Company", conn)
             conn.close()
         except:
-            df_t = pd.DataFrame(columns=["ID","Company"])
+            df_t = pd.DataFrame(columns=["ID", "Company"])
         st.dataframe(df_t, width='stretch', height=400, hide_index=True)
 
     with c4:
         st.markdown("#### ✈️ Airlines")
         with st.form(key="f_air_final", clear_on_submit=True):
-            nl=st.text_input("Airline name", placeholder="الخطوط / Airlines...", label_visibility="collapsed")
+            nl = st.text_input("Airline name", placeholder="الخطوط...", label_visibility="collapsed")
             if st.form_submit_button("Add Airline", width='stretch') and nl.strip():
                 conn = sqlite3.connect(DB)
                 conn.execute("INSERT OR IGNORE INTO Airlines (Airline) VALUES (?)", (nl.strip(),))
                 conn.commit()
                 conn.close()
-                st.session_state.table_version+=1
+                st.session_state.table_version += 1
                 st.rerun()
         try:
             conn = sqlite3.connect(DB)
             dfa2 = pd.read_sql("SELECT * FROM Airlines ORDER BY Airline", conn)
             conn.close()
         except:
-            dfa2 = pd.DataFrame(columns=["ID","Airline"])
+            dfa2 = pd.DataFrame(columns=["ID", "Airline"])
         st.dataframe(dfa2, width='stretch', height=400, hide_index=True)
