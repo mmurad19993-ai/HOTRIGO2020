@@ -65,7 +65,6 @@ def init_db():
     c.execute("CREATE TABLE IF NOT EXISTS Airlines (ID INTEGER PRIMARY KEY AUTOINCREMENT, Airline TEXT UNIQUE, Total REAL DEFAULT 0, Total_Pay REAL DEFAULT 0, Balance REAL DEFAULT 0, Note TEXT)")
     c.execute("CREATE TABLE IF NOT EXISTS TransportCo (ID INTEGER PRIMARY KEY AUTOINCREMENT, Company TEXT UNIQUE, Total REAL DEFAULT 0, Total_Pay REAL DEFAULT 0, Balance REAL DEFAULT 0, Note TEXT)")
     c.execute("CREATE TABLE IF NOT EXISTS Payments (ID INTEGER PRIMARY KEY AUTOINCREMENT, Date TEXT, Agent TEXT, Amount REAL, Note TEXT)")
-    # For compatibility with old code
     c.execute("CREATE TABLE IF NOT EXISTS agents (name TEXT UNIQUE)")
     c.execute("CREATE TABLE IF NOT EXISTS hotels (name TEXT UNIQUE)")
     c.execute("CREATE TABLE IF NOT EXISTS airlines (name TEXT UNIQUE)")
@@ -82,7 +81,6 @@ def load_list_sql(table, col):
     try:
         conn = sqlite3.connect(DB)
         cur = conn.cursor()
-        # Map table names
         if table == "Agents_Balance": t = "Agents_Balance"; c = "Agent"
         elif table == "HOTELS": t = "HOTELS"; c = "Hotel"
         elif table == "Airlines": t = "Airlines"; c = "Airline"
@@ -91,7 +89,6 @@ def load_list_sql(table, col):
         cur.execute(f"SELECT {c} FROM {t} WHERE {c} IS NOT NULL AND {c}!='' ORDER BY {c}")
         rows = [r[0].strip() for r in cur.fetchall() if r[0] and r[0].strip()]
         conn.close()
-        # dedup
         seen=set(); clean=[]
         for v in rows:
             low=v.lower()
@@ -238,7 +235,6 @@ with t1:
                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         (comp, pas, int(pax_count), hotel, int(rooms_count), rooms_str, ed.strftime("%Y-%m-%d"), nights_val, xd.strftime("%Y-%m-%d"), pn, hotel_total, flight_p, trans_p, sell, cost_val, sell-cost_val, sd.strftime("%Y-%m-%d"), voucher_no, note, airline_sel, emp, dep_time, ret_time, flight_no_dep, flight_no_ret, transport_co_sel))
                         
-                        # Update Agents_Balance like before
                         try:
                             cur.execute("SELECT Total FROM Agents_Balance WHERE lower(Agent)=lower(?)", (comp.strip(),))
                             r = cur.fetchone()
@@ -246,7 +242,6 @@ with t1:
                                 new_t = (r[0] or 0) + (sell or 0)
                                 cur.execute("UPDATE Agents_Balance SET Total=?, Balance=Total-Total_Pay WHERE lower(Agent)=lower(?)", (new_t, comp.strip()))
                             else:
-                                # auto-create if not exists
                                 cur.execute("INSERT INTO Agents_Balance (Agent, Total, Balance) VALUES (?,?,?)", (comp.strip(), sell or 0, sell or 0))
                         except: pass
                         try:
@@ -304,8 +299,9 @@ with t3:
             na=st.text_input("Agent name", placeholder="Agent name...", label_visibility="collapsed")
             if st.form_submit_button("Add Agent", width='stretch') and na.strip():
                 conn = sqlite3.connect(DB)
-                conn.execute("INSERT OR IGNORE INTO Agents_Balance (Agent, Total, Total_Pay, Balance) VALUES (?,?,?,?)", (na.strip().upper(), 0,0,0))
-                conn.execute("INSERT OR IGNORE INTO agents (name) VALUES (?)", (na.strip().upper(),))
+                # تم التعديل هنا فقط - صار يقبل العربي
+                conn.execute("INSERT OR IGNORE INTO Agents_Balance (Agent, Total, Total_Pay, Balance) VALUES (?,?,?,?)", (na.strip(), 0,0,0))
+                conn.execute("INSERT OR IGNORE INTO agents (name) VALUES (?)", (na.strip(),))
                 conn.commit(); conn.close()
                 st.session_state.table_version+=1
                 st.rerun()
@@ -323,8 +319,9 @@ with t3:
             nh=st.text_input("Hotel name", placeholder="Hotel name...", label_visibility="collapsed")
             if st.form_submit_button("Add Hotel", width='stretch') and nh.strip():
                 conn = sqlite3.connect(DB)
-                conn.execute("INSERT OR IGNORE INTO HOTELS (Hotel, Total, Total_Pay, Balance) VALUES (?,?,?,?)", (nh.strip().upper(), 0,0,0))
-                conn.execute("INSERT OR IGNORE INTO hotels (name) VALUES (?)", (nh.strip().upper(),))
+                # تم التعديل هنا فقط - صار يقبل العربي
+                conn.execute("INSERT OR IGNORE INTO HOTELS (Hotel, Total, Total_Pay, Balance) VALUES (?,?,?,?)", (nh.strip(), 0,0,0))
+                conn.execute("INSERT OR IGNORE INTO hotels (name) VALUES (?)", (nh.strip(),))
                 conn.commit(); conn.close()
                 st.session_state.table_version+=1
                 st.rerun()
@@ -342,8 +339,9 @@ with t3:
             nt=st.text_input("Transport name", placeholder="Transport company...", label_visibility="collapsed")
             if st.form_submit_button("Add Transport", width='stretch') and nt.strip():
                 conn = sqlite3.connect(DB)
-                conn.execute("INSERT OR IGNORE INTO TransportCo (Company) VALUES (?)", (nt.strip().upper(),))
-                conn.execute("INSERT OR IGNORE INTO transport_companies (name) VALUES (?)", (nt.strip().upper(),))
+                # تم التعديل هنا فقط - صار يقبل العربي
+                conn.execute("INSERT OR IGNORE INTO TransportCo (Company) VALUES (?)", (nt.strip(),))
+                conn.execute("INSERT OR IGNORE INTO transport_companies (name) VALUES (?)", (nt.strip(),))
                 conn.commit(); conn.close()
                 st.session_state.table_version+=1
                 st.rerun()
@@ -361,8 +359,9 @@ with t3:
             nl=st.text_input("Airline name", placeholder="Airline name...", label_visibility="collapsed")
             if st.form_submit_button("Add Airline", width='stretch') and nl.strip():
                 conn = sqlite3.connect(DB)
-                conn.execute("INSERT OR IGNORE INTO Airlines (Airline) VALUES (?)", (nl.strip().upper(),))
-                conn.execute("INSERT OR IGNORE INTO airlines (name) VALUES (?)", (nl.strip().upper(),))
+                # تم التعديل هنا فقط - صار يقبل العربي
+                conn.execute("INSERT OR IGNORE INTO Airlines (Airline) VALUES (?)", (nl.strip(),))
+                conn.execute("INSERT OR IGNORE INTO airlines (name) VALUES (?)", (nl.strip(),))
                 conn.commit(); conn.close()
                 st.session_state.table_version+=1
                 st.rerun()
